@@ -9,12 +9,16 @@ export interface Agent {
 export interface Camp {
   id: string;
   name: string;
+  organization_name?: string;
   provider_id: string;
   provider_name: string;
   provider_logo: string;
   start_date: string; // ISO format
   end_date: string;
+  timing?: string;
+  assigned_agent_count?: number;
   location: string;
+  address?: string;
   status: 'active' | 'upcoming' | 'completed';
 }
 
@@ -49,6 +53,9 @@ export interface PackageComponent {
   section: string;
   type: 'numeric' | 'text' | 'boolean' | 'options';
   options?: string[]; // If type is options
+  unit?: string;
+  input_mode?: 'sample' | 'instant' | 'attachment';
+  provider_category?: ProviderCategory;
   required: boolean;
 }
 
@@ -66,7 +73,7 @@ export interface ComponentEntry {
   camp_id: string;
   package_component_id: string;
   section_name: string;
-  values: Record<string, any>;
+  values: Record<string, unknown>;
   status: 'draft_saved' | 'completed' | 'needs_correction';
   saved_by: string;
   saved_at: string;
@@ -90,4 +97,39 @@ export interface UserSearchResult {
   appointment?: Appointment;
   package?: Package;
   entries?: ComponentEntry[];
+}
+
+export type ProviderCategory = 'blood' | 'external_lab' | 'ecg' | 'radiology' | 'instant';
+
+export interface HealthProvider {
+  id: string;
+  name: string;
+  category: ProviderCategory;
+  status: 'available' | 'busy' | 'offline';
+}
+
+export type SampleCollectionStatus =
+  | 'Pending'
+  | 'Sample Collected'
+  | 'Sent to Lab'
+  | 'Processing'
+  | 'Report Received'
+  | 'Uploaded'
+  | 'Completed';
+
+export type ReportStatus = 'Pending' | 'Completed';
+
+export interface UploadedReport {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  uploaded_at: string;
+}
+
+export interface TestWorkflowState {
+  provider_id: string;
+  collection_status: SampleCollectionStatus;
+  report_status: ReportStatus;
+  uploads: UploadedReport[];
 }

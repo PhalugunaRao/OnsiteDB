@@ -6,8 +6,8 @@ export default function AuthLayout() {
   if (agent) return <Navigate to="/" replace />;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-n-50">
-      <div className="max-w-md w-full">
+    <div className="flex min-h-screen items-center justify-center bg-n-50 px-0 py-6 sm:px-4">
+      <div className="w-full max-w-md">
         <Outlet />
       </div>
     </div>

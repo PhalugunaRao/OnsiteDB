@@ -1,15 +1,51 @@
-import type { Agent, Appointment, Camp, ComponentEntry, Package, User, UserSearchResult } from '../types';
+import type { Agent, Appointment, Camp, ComponentEntry, HealthProvider, Package, ProviderCategory, User, UserSearchResult } from '../types';
 
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const normalizeIndianMobile = (value: string) => {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('+91')) return trimmed.slice(3);
+  return trimmed;
+};
+
+const isValidIndianMobile = (value: string) => /^[6-9]\d{9}$/.test(normalizeIndianMobile(value));
 
 const mockAgents: Agent[] = [
   { id: 'agent-1', name: 'John Doe', mobile_number: '9999999999', role: 'Camp Partner Agent', is_active: true },
 ];
 
 const mockCamps: Camp[] = [
-  { id: 'camp-1', name: 'TechCorp Annual Wellness', provider_id: 'prov-1', provider_name: 'Apollo Health', provider_logo: 'https://via.placeholder.com/50', start_date: new Date(Date.now() - 86400000).toISOString(), end_date: new Date(Date.now() + 86400000).toISOString(), location: 'TechCorp HQ, Bld 3', status: 'active' },
-  { id: 'camp-2', name: 'HealthCheck Camp 2', provider_id: 'prov-2', provider_name: 'Max Healthcare', provider_logo: 'https://via.placeholder.com/50', start_date: new Date(Date.now() - 86400000).toISOString(), end_date: new Date(Date.now() + 86400000).toISOString(), location: 'Cyber City', status: 'active' },
+  {
+    id: 'camp-1',
+    name: 'TechCorp Annual Wellness',
+    organization_name: 'TechCorp India Pvt Ltd',
+    provider_id: 'prov-1',
+    provider_name: 'Apollo Health',
+    provider_logo: 'https://via.placeholder.com/50',
+    start_date: new Date(Date.now() - 86400000).toISOString(),
+    end_date: new Date(Date.now() + 86400000).toISOString(),
+    timing: '08:00 AM - 05:30 PM',
+    assigned_agent_count: 8,
+    location: 'TechCorp HQ, Bld 3',
+    address: 'Tower 3, TechCorp Campus, Outer Ring Road, Bengaluru',
+    status: 'active'
+  },
+  {
+    id: 'camp-2',
+    name: 'Cyber City Preventive Screening',
+    organization_name: 'Cyber City Business Park',
+    provider_id: 'prov-2',
+    provider_name: 'Max Healthcare',
+    provider_logo: 'https://via.placeholder.com/50',
+    start_date: new Date(Date.now() - 86400000).toISOString(),
+    end_date: new Date(Date.now() + 86400000).toISOString(),
+    timing: '09:00 AM - 04:00 PM',
+    assigned_agent_count: 5,
+    location: 'Cyber City',
+    address: 'Block C, Ground Floor, Cyber City, Gurugram',
+    status: 'active'
+  },
 ];
 
 const mockUsers: User[] = [
@@ -22,46 +58,62 @@ const mockPackages: Package[] = [
     id: 'pkg-1',
     name: 'Comprehensive Health Package',
     components: [
-      { id: 'comp-v1', name: 'Blood Pressure (Systolic)', section: 'Vitals/BP', type: 'numeric', required: true },
-      { id: 'comp-v2', name: 'Blood Pressure (Diastolic)', section: 'Vitals/BP', type: 'numeric', required: true },
-      { id: 'comp-v3', name: 'Weight (kg)', section: 'Vitals/BP', type: 'numeric', required: true },
-      { id: 'comp-v4', name: 'Height (cm)', section: 'Vitals/BP', type: 'numeric', required: true },
-      { id: 'comp-v5', name: 'Pulse Rate', section: 'Vitals/BP', type: 'numeric', required: true },
+      { id: 'comp-v1', name: 'Blood Pressure (Systolic)', section: 'Vitals/BP', type: 'numeric', unit: 'mmHg', input_mode: 'instant', provider_category: 'instant', required: true },
+      { id: 'comp-v2', name: 'Blood Pressure (Diastolic)', section: 'Vitals/BP', type: 'numeric', unit: 'mmHg', input_mode: 'instant', provider_category: 'instant', required: true },
+      { id: 'comp-v3', name: 'Weight', section: 'Vitals/BP', type: 'numeric', unit: 'kg', input_mode: 'instant', provider_category: 'instant', required: true },
+      { id: 'comp-v4', name: 'Height', section: 'Vitals/BP', type: 'numeric', unit: 'cm', input_mode: 'instant', provider_category: 'instant', required: true },
+      { id: 'comp-v5', name: 'Pulse Rate', section: 'Vitals/BP', type: 'numeric', unit: 'bpm', input_mode: 'instant', provider_category: 'instant', required: true },
       
-      { id: 'comp-b1', name: 'Hemoglobin', section: 'Blood', type: 'numeric', required: true },
-      { id: 'comp-b2', name: 'RBC Count', section: 'Blood', type: 'numeric', required: true },
-      { id: 'comp-b3', name: 'WBC Count', section: 'Blood', type: 'numeric', required: true },
-      { id: 'comp-b4', name: 'Platelet Count', section: 'Blood', type: 'numeric', required: true },
+      { id: 'comp-b1', name: 'Hemoglobin', section: 'Blood', type: 'numeric', unit: 'g/dL', input_mode: 'sample', provider_category: 'blood', required: true },
+      { id: 'comp-b2', name: 'RBC Count', section: 'Blood', type: 'numeric', unit: 'million/uL', input_mode: 'sample', provider_category: 'blood', required: true },
+      { id: 'comp-b3', name: 'WBC Count', section: 'Blood', type: 'numeric', unit: 'cells/uL', input_mode: 'sample', provider_category: 'blood', required: true },
+      { id: 'comp-b4', name: 'Platelet Count', section: 'Blood', type: 'numeric', unit: 'lakh/uL', input_mode: 'sample', provider_category: 'blood', required: true },
       
-      { id: 'comp-u1', name: 'Color', section: 'Urine', type: 'text', required: true },
-      { id: 'comp-u2', name: 'Appearance', section: 'Urine', type: 'text', required: true },
+      { id: 'comp-u1', name: 'Color', section: 'Urine', type: 'text', input_mode: 'sample', provider_category: 'external_lab', required: true },
+      { id: 'comp-u2', name: 'Appearance', section: 'Urine', type: 'text', input_mode: 'sample', provider_category: 'external_lab', required: true },
       
-      { id: 'comp-bca1', name: 'Body Fat %', section: 'BCA', type: 'numeric', required: true },
+      { id: 'comp-bca1', name: 'Body Fat', section: 'BCA', type: 'numeric', unit: '%', input_mode: 'instant', provider_category: 'instant', required: true },
       
-      { id: 'comp-bmd1', name: 'T-Score', section: 'BMD', type: 'numeric', required: true },
+      { id: 'comp-bmd1', name: 'T-Score', section: 'BMD', type: 'numeric', input_mode: 'instant', provider_category: 'instant', required: true },
       
-      { id: 'comp-vis1', name: 'Left Eye', section: 'Vision', type: 'text', required: true },
-      { id: 'comp-vis2', name: 'Right Eye', section: 'Vision', type: 'text', required: true },
+      { id: 'comp-vis1', name: 'Left Eye', section: 'Vision', type: 'text', input_mode: 'instant', provider_category: 'instant', required: true },
+      { id: 'comp-vis2', name: 'Right Eye', section: 'Vision', type: 'text', input_mode: 'instant', provider_category: 'instant', required: true },
       
-      { id: 'comp-ecg1', name: 'Test Result', section: 'ECG', type: 'text', required: true },
-      { id: 'comp-ecg2', name: 'Doctor Remarks', section: 'ECG', type: 'text', required: true },
+      { id: 'comp-ecg1', name: 'Test Result', section: 'ECG', type: 'text', input_mode: 'instant', provider_category: 'ecg', required: true },
+      { id: 'comp-ecg2', name: 'Doctor Remarks', section: 'ECG', type: 'text', input_mode: 'instant', provider_category: 'ecg', required: true },
       
-      { id: 'comp-hr1', name: 'Hearing Left', section: 'Hearing', type: 'text', required: true },
-      { id: 'comp-hr2', name: 'Hearing Right', section: 'Hearing', type: 'text', required: true },
+      { id: 'comp-hr1', name: 'Hearing Left', section: 'Hearing', type: 'text', input_mode: 'instant', provider_category: 'instant', required: true },
+      { id: 'comp-hr2', name: 'Hearing Right', section: 'Hearing', type: 'text', input_mode: 'instant', provider_category: 'instant', required: true },
       
-      { id: 'comp-pft1', name: 'FEV1', section: 'PFT', type: 'numeric', required: true },
-      { id: 'comp-pft2', name: 'FVC', section: 'PFT', type: 'numeric', required: true },
+      { id: 'comp-pft1', name: 'FEV1', section: 'PFT', type: 'numeric', unit: 'L', input_mode: 'instant', provider_category: 'instant', required: true },
+      { id: 'comp-pft2', name: 'FVC', section: 'PFT', type: 'numeric', unit: 'L', input_mode: 'instant', provider_category: 'instant', required: true },
       
-      { id: 'comp-xray1', name: 'X-Ray Result', section: 'X-Ray', type: 'text', required: true },
+      { id: 'comp-xray1', name: 'X-Ray Result', section: 'X-Ray', type: 'text', input_mode: 'attachment', provider_category: 'radiology', required: true },
       
-      { id: 'comp-vac1', name: 'Vaccination Status', section: 'Vaccination', type: 'text', required: true },
+      { id: 'comp-vac1', name: 'Vaccination Status', section: 'Vaccination', type: 'text', input_mode: 'instant', provider_category: 'instant', required: true },
       
-      { id: 'comp-fit1', name: 'Fitness Level', section: 'Fitness', type: 'text', required: true },
+      { id: 'comp-fit1', name: 'Fitness Level', section: 'Fitness', type: 'text', input_mode: 'instant', provider_category: 'instant', required: true },
       
-      { id: 'comp-ses1', name: 'Session Notes', section: 'Session', type: 'text', required: true },
+      { id: 'comp-ses1', name: 'Session Notes', section: 'Session', type: 'text', input_mode: 'instant', provider_category: 'instant', required: true },
     ]
   }
 ];
+
+const mockHealthProviders: HealthProvider[] = [
+  { id: 'thyrocare', name: 'Thyrocare', category: 'blood', status: 'available' },
+  { id: 'apollo-lab', name: 'Apollo Lab', category: 'external_lab', status: 'available' },
+  { id: 'instant-health', name: 'Instant Health Check', category: 'instant', status: 'available' },
+  { id: 'cardio-mobile', name: 'Cardio Mobile ECG', category: 'ecg', status: 'busy' },
+  { id: 'radiology-partner', name: 'External Radiology Partner', category: 'radiology', status: 'available' },
+];
+
+const defaultProviderByCategory: Record<ProviderCategory, string> = {
+  blood: 'thyrocare',
+  external_lab: 'apollo-lab',
+  instant: 'instant-health',
+  ecg: 'cardio-mobile',
+  radiology: 'radiology-partner',
+};
 
 const mockAppointments: Appointment[] = [
   {
@@ -95,15 +147,18 @@ const mockAppointments: Appointment[] = [
 export const api = {
   validateAgent: async (mobile: string) => {
     await delay(500);
-    const agent = mockAgents.find(a => a.mobile_number === mobile);
+    if (!isValidIndianMobile(mobile)) throw new Error('Enter a valid Indian mobile number.');
+    const normalizedMobile = normalizeIndianMobile(mobile);
+    const agent = mockAgents.find(a => a.mobile_number === normalizedMobile);
     if (!agent) throw new Error('Agent not found');
     return { success: true };
   },
   
   verifyOtp: async (mobile: string, otp: string) => {
     await delay(500);
-    if (otp !== '1234') throw new Error('Invalid OTP');
-    const agent = mockAgents.find(a => a.mobile_number === mobile);
+    if (otp !== '123456') throw new Error('Invalid OTP');
+    const normalizedMobile = normalizeIndianMobile(mobile);
+    const agent = mockAgents.find(a => a.mobile_number === normalizedMobile);
     const activeCamps = mockCamps.filter(c => c.status === 'active');
     if (activeCamps.length === 0) throw new Error('No active camp mapped for this agent');
     return { agent, activeCamps };
@@ -111,9 +166,16 @@ export const api = {
 
   searchUser: async (query: string): Promise<UserSearchResult | null> => {
     await delay(500);
-    const user = mockUsers.find(u => u.mobile_number === query || u.email === query || u.employee_id === query);
+    const lowerQuery = query.toLowerCase();
+    const user = mockUsers.find(u =>
+      u.id === query ||
+      u.mobile_number === query ||
+      u.email.toLowerCase() === lowerQuery ||
+      u.employee_id.toLowerCase() === lowerQuery
+    );
     if (!user) return null;
-    return { user, package: mockPackages[0], entries: [] };
+    const appointment = mockAppointments.find(apt => apt.user_id === user.id);
+    return { user, appointment, package: mockPackages[0], entries: [] };
   },
 
   searchAppointments: async (query: string) => {
@@ -161,7 +223,15 @@ export const api = {
     return { appointment, user, package: pkg, entries: [] };
   },
 
-  createBooking: async (_request: any): Promise<{ appointment_id: string }> => {
+  getHealthProviders: async (): Promise<HealthProvider[]> => {
+    await delay(250);
+    return mockHealthProviders;
+  },
+
+  getDefaultProviderForCategory: (category: ProviderCategory) => defaultProviderByCategory[category],
+
+  createBooking: async (request: Record<string, unknown>): Promise<{ appointment_id: string }> => {
+    void request;
     await delay(1000);
     if (Math.random() > 0.8) throw new Error('Partner API Timeout');
     return { appointment_id: `apt-${Math.random().toString(36).substr(2, 9)}` };

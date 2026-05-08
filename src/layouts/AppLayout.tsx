@@ -1,6 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { LogOut, Activity, ArrowLeft } from 'lucide-react';
+import { LogOut, Activity, ArrowLeft, MapPinned } from 'lucide-react';
 
 export default function AppLayout() {
   const { agent, selectedCamp, logout } = useStore();
@@ -32,23 +32,23 @@ export default function AppLayout() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-n-50">
-      <header className="sticky top-0 z-50 bg-white border-b border-n-200 shadow-sm h-14 flex items-center px-4 md:px-6">
+    <div className="flex min-h-screen flex-col bg-n-50">
+      <header className="sticky top-0 z-50 flex h-[52px] items-center border-b border-n-200 bg-n-50/95 px-4 backdrop-blur md:px-6">
         <div className="flex items-center gap-3">
           {showBackButton && (
             <button 
               onClick={handleBack}
-              className="mr-1 inline-flex h-9 w-9 items-center justify-center rounded-md border border-n-200 bg-white text-n-600 transition-colors hover:border-brand-m hover:bg-brand-lt hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              className="btn btn-icon btn-secondary btn-sm mr-1"
               aria-label="Go back"
             >
               <ArrowLeft size={18} />
             </button>
           )}
-          <div className="w-7 h-7 rounded bg-brand-lt text-brand flex items-center justify-center">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-lt text-brand">
             <Activity size={16} />
           </div>
-          <Link to="/" className="font-semibold text-n-900 hidden sm:inline hover:text-brand transition-colors">
-            Dashboard
+          <Link to="/" className="hidden font-semibold text-n-900 transition-colors hover:text-brand sm:inline">
+            Onsite Healthcare
           </Link>
         </div>
 
@@ -56,11 +56,12 @@ export default function AppLayout() {
           {selectedCamp && (
             <>
               <div className="hidden sm:block">
-                <span className="text-sm font-medium text-n-900 bg-n-50 px-3 py-1.5 rounded-full border border-n-200">
+                <span className="inline-flex items-center gap-2 rounded-full border border-n-200 bg-white px-3 py-1.5 text-sm font-medium text-n-900">
+                  <MapPinned size={14} className="text-brand" />
                   {selectedCamp.name}
                 </span>
               </div>
-              <div className="h-5 w-px bg-n-200 hidden sm:block"></div>
+              <div className="hidden h-5 w-px bg-n-200 sm:block"></div>
             </>
           )}
           
@@ -69,14 +70,14 @@ export default function AppLayout() {
               <span className="text-[10px] font-semibold tracking-wider text-n-500 uppercase">{agent?.role}</span>
               <span className="text-sm font-medium text-n-900 leading-tight">{agent?.name}</span>
             </div>
-            <button onClick={handleLogout} className="text-n-500 hover:text-brand transition-colors p-1.5 rounded-md hover:bg-n-50" title="Logout">
+            <button onClick={handleLogout} className="btn btn-icon btn-tertiary btn-sm" title="Logout" aria-label="Logout">
               <LogOut size={18} />
             </button>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 lg:p-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:p-6 lg:p-8">
         <Outlet />
       </main>
     </div>

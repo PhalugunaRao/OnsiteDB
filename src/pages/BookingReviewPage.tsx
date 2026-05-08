@@ -44,15 +44,16 @@ export default function BookingReviewPage() {
         component_entries: Object.keys(draftEntries)
       });
       navigate(`/appointment/${res.appointment_id}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setErrorMsg('Booking failed. Your data is preserved.');
+      const failureReason = err instanceof Error ? err.message : 'Partner API Timeout';
       addBookingFailure({
         id: `fail-${Date.now()}`,
         local_reference_id: `loc-${Date.now()}`,
         user_id: user.id,
         camp_id: selectedCamp.id,
         provider_id: selectedCamp.provider_id,
-        failure_reason: err.message || 'Partner API Timeout',
+        failure_reason: failureReason,
         last_attempted_at: new Date().toISOString(),
         retry_count: 1,
         preserved_component_entry_ids: Object.keys(draftEntries)
@@ -62,20 +63,19 @@ export default function BookingReviewPage() {
     }
   };
 
-  if (loading) return <div className="p-10 text-center text-n-500">Loading details...</div>;
-  if (!user || !pkg) return <div className="p-10 text-center text-rose">Error loading user.</div>;
+  if (loading) return <div className="p-10 text-center text-sm font-medium text-n-500">Loading details...</div>;
+  if (!user || !pkg) return <div className="empty-state ds-surface mx-auto max-w-xl"><div className="empty-state-title">Error loading user</div><p className="empty-state-desc">This employee record is not available for booking review.</p></div>;
 
   const capturedCount = pkg.components.filter(c => draftEntries[c.id]).length;
   const totalCount = pkg.components.length;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 pb-20">
-      <div className="text-center mb-8">
-        <div className="w-16 h-16 rounded-full bg-brand-lt text-brand flex items-center justify-center mx-auto mb-4">
+    <div className="mx-auto max-w-3xl space-y-6 pb-24">
+      <div className="mb-8 text-center">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-lt text-brand">
           <CalendarPlus size={32} />
         </div>
-        <h1 className="text-3xl font-serif font-bold text-n-900 mb-2">Review & Create Booking</h1>
-        <p className="text-n-600">Please review the details before confirming the appointment.</p>
+        <h1 className="text-2xl font-bold leading-tight text-n-900">Review & Create Booking</h1>
       </div>
 
       {errorMsg && (
@@ -93,9 +93,9 @@ export default function BookingReviewPage() {
       )}
 
       <div className="ds-card">
-        <h3 className="font-semibold text-n-900 mb-4 border-b border-n-100 pb-2">User Details</h3>
+        <h3 className="mb-4 border-b border-n-100 pb-2 text-base font-bold text-n-900">User Details</h3>
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-12 h-12 rounded-full bg-n-100 flex items-center justify-center text-n-500">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-lt text-brand">
             <UserIcon size={24} />
           </div>
           <div>
@@ -104,8 +104,8 @@ export default function BookingReviewPage() {
           </div>
         </div>
 
-        <h3 className="font-semibold text-n-900 mb-4 border-b border-n-100 pb-2">Camp & Provider</h3>
-        <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+        <h3 className="mb-4 border-b border-n-100 pb-2 text-base font-bold text-n-900">Camp & Provider</h3>
+        <div className="mb-6 grid gap-4 text-sm sm:grid-cols-2">
           <div>
             <span className="text-n-500 block mb-1">Camp Name</span>
             <span className="font-medium text-n-900">{selectedCamp?.name}</span>
@@ -116,11 +116,10 @@ export default function BookingReviewPage() {
           </div>
         </div>
 
-        <h3 className="font-semibold text-n-900 mb-4 border-b border-n-100 pb-2">Captured Data Summary</h3>
-        <div className="flex items-center justify-between p-4 rounded-lg bg-n-50 mb-8">
+        <h3 className="mb-4 border-b border-n-100 pb-2 text-base font-bold text-n-900">Captured Data Summary</h3>
+        <div className="mb-8 flex flex-col gap-3 rounded-lg bg-n-50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-medium text-n-900">{pkg.name}</div>
-            <div className="text-sm text-n-600 mt-1">Data will be pushed with the booking request</div>
           </div>
           <div className="flex items-center gap-2">
             <div className="font-mono text-lg font-bold text-n-900">{capturedCount}/{totalCount}</div>
@@ -132,7 +131,7 @@ export default function BookingReviewPage() {
         <button 
           onClick={handleCreateBooking} 
           disabled={submitting} 
-          className={`btn btn-brand w-full btn-lg ${submitting ? 'btn-loading' : ''}`}
+          className={`btn btn-primary btn-lg w-full ${submitting ? 'btn-loading' : ''}`}
         >
           {submitting ? 'Creating Booking...' : 'Confirm & Create Booking'}
         </button>
