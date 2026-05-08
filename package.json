@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -11,7 +14,6 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "@rolldown/binding-darwin-arm64": "^1.0.0-rc.17",
     "@tailwindcss/vite": "^4.2.4",
     "@tanstack/react-table": "^8.21.3",
     "axios": "^1.16.0",
