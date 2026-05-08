@@ -69,15 +69,15 @@ export default function CampSelectionPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-5 md:space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold leading-tight text-n-900">Select Active Camp</h1>
+          <h1 className="text-[24px] font-bold leading-tight text-n-900 md:text-[30px]">Select Active Camp</h1>
         </div>
         <span className="badge badge-neutral w-fit"><span className="font-mono">{activeCamps.length}</span> active</span>
       </div>
 
-      <div className="ds-surface p-3 sm:p-4">
+      <div className="ds-surface rounded-2xl p-3 sm:p-4">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-n-400" size={18} />
           <input
@@ -92,30 +92,30 @@ export default function CampSelectionPage() {
       {loading ? (
         <CampSkeleton />
       ) : filteredCamps.length > 0 ? (
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-4 md:gap-5 lg:grid-cols-2">
           {filteredCamps.map(camp => (
             <button
               key={camp.id}
               type="button"
-              className="ds-card group touch-manipulation p-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              className="ds-card group touch-manipulation rounded-2xl p-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               onClick={() => handleSelect(camp)}
             >
-              <div className="p-5 sm:p-6">
-                <div className="mb-5 flex items-start justify-between gap-4">
+              <div className="p-4 sm:p-5">
+                <div className="mb-4 flex items-start justify-between gap-3">
                   <div className="flex min-w-0 gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-brand-m bg-brand-lt text-brand">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-brand-m bg-brand-lt text-brand">
                       <Building2 size={24} />
                     </div>
                     <div className="min-w-0">
-                      <h2 className="text-lg font-bold leading-snug text-n-900 transition-colors group-hover:text-brand">{camp.name}</h2>
-                      <p className="mt-1 text-sm font-semibold text-n-700">{camp.organization_name || camp.provider_name}</p>
+                      <h2 className="text-[18px] font-bold leading-snug text-n-900 transition-colors group-hover:text-brand">{camp.name}</h2>
+                      <p className="mt-1 text-[14px] font-semibold leading-5 text-n-700">{camp.organization_name || camp.provider_name}</p>
                       <p className="mt-0.5 text-xs text-n-500">{camp.provider_name}</p>
                     </div>
                   </div>
-                  <span className="badge badge-ok shrink-0">● Active</span>
+                  <span className="badge badge-ok shrink-0">● Live</span>
                 </div>
 
-                <div className="grid gap-3 text-sm text-n-700 sm:grid-cols-2">
+                <div className="grid gap-3 text-[14px] leading-5 text-n-700 sm:grid-cols-2">
                   <div className="flex gap-2">
                     <MapPin size={17} className="mt-0.5 shrink-0 text-n-400" />
                     <span>{camp.address || camp.location}</span>
@@ -135,8 +135,8 @@ export default function CampSelectionPage() {
                 </div>
               </div>
 
-              <div className="border-t border-n-100 bg-n-50 px-5 py-4 sm:px-6">
-                <span className="btn btn-primary w-full">Select Camp</span>
+              <div className="border-t border-n-100 bg-n-50 px-4 py-3 sm:px-5">
+                <span className="btn btn-primary btn-lg w-full">Select Camp</span>
               </div>
             </button>
           ))}

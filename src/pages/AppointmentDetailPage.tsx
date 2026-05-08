@@ -13,6 +13,7 @@ import {
   Trash2,
   UploadCloud,
   User as UserIcon,
+  X,
 } from 'lucide-react';
 
 import { api } from '../api/mock';
@@ -154,6 +155,7 @@ export default function AppointmentDetailPage() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [validationError, setValidationError] = useState('');
   const [activeModuleId, setActiveModuleId] = useState(medicalModules[0].id);
+  const [mobileWorkspaceOpen, setMobileWorkspaceOpen] = useState(false);
   const [draggingModule, setDraggingModule] = useState<string | null>(null);
 
   useEffect(() => {
@@ -410,8 +412,11 @@ export default function AppointmentDetailPage() {
                   <button
                     key={module.id}
                     type="button"
-                    onClick={() => setActiveModuleId(module.id)}
-                    className={`flex w-full items-start gap-3 p-4 text-left transition-colors ${isActive ? 'bg-brand-lt' : 'hover:bg-n-50 active:bg-brand-lt'}`}
+                    onClick={() => {
+                      setActiveModuleId(module.id);
+                      setMobileWorkspaceOpen(true);
+                    }}
+                    className={`flex w-full touch-manipulation items-start gap-3 p-4 text-left transition-colors md:p-5 lg:p-4 ${isActive ? 'bg-brand-lt' : 'hover:bg-n-50 active:bg-brand-lt'}`}
                   >
                     <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${savedSections[module.id] ? 'bg-brand-lt text-brand' : 'bg-n-100 text-n-500'}`}>
                       {savedSections[module.id] ? <CheckCircle2 size={17} /> : <Activity size={17} />}
@@ -434,174 +439,27 @@ export default function AppointmentDetailPage() {
           </div>
         </aside>
 
-        <section className="space-y-4">
-          <div className="ds-card p-0">
-            <div className="border-b border-n-100 bg-n-50 px-4 py-4 md:px-5">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-[0.12em] text-brand">{categoryLabels[activeModule.providerCategory]}</div>
-                  <h2 className="mt-1 text-xl font-bold text-n-900">{activeModule.title}</h2>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <span className={`badge ${clinicalStatusClass[activeClinicalStatus]}`}>{activeClinicalStatus}</span>
-                  {activeWorkflow && <span className={`badge ${workflowBadgeClass[activeWorkflow.collection_status]}`}>{activeWorkflow.collection_status}</span>}
-                </div>
-              </div>
-            </div>
-
-            {activeWorkflow && (
-              <div className="space-y-5 p-4 md:p-5">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="ds-field">
-                    <label className="ds-label">Provider</label>
-                    <select
-                      className="ds-input"
-                      value={activeWorkflow.provider_id}
-                      onChange={(event) => updateWorkflow(activeModule.id, { provider_id: event.target.value })}
-                    >
-                      {providersForActive.map(provider => (
-                        <option key={provider.id} value={provider.id}>{provider.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="ds-field">
-                    <label className="ds-label">Collection Status</label>
-                    <select
-                      className="ds-input"
-                      value={activeWorkflow.collection_status}
-                      onChange={(event) => updateWorkflow(activeModule.id, { collection_status: event.target.value as SampleCollectionStatus })}
-                    >
-                      {collectionStatuses.map(status => <option key={status} value={status}>{status}</option>)}
-                    </select>
-                  </div>
-                  <div className="ds-field">
-                    <label className="ds-label">Report Status</label>
-                    <select
-                      className="ds-input"
-                      value={activeWorkflow.report_status}
-                      onChange={(event) => updateWorkflow(activeModule.id, { report_status: event.target.value as ReportStatus })}
-                    >
-                      {reportStatuses.map(status => <option key={status} value={status}>{status}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
-                  <div className="space-y-4">
-                    {Object.entries(activeGroups).map(([groupName, fields]) => {
-                      const groupKey = `${activeModule.id}:${groupName}`;
-                      const isOpen = openGroups[groupKey] ?? true;
-                      return (
-                        <div key={groupName} className="clinical-field-group">
-                          <button
-                            type="button"
-                            className="clinical-field-group-title flex w-full items-center justify-between text-left"
-                            onClick={() => setOpenGroups(prev => ({ ...prev, [groupKey]: !isOpen }))}
-                          >
-                            <span>{groupName}</span>
-                            <ChevronRight size={15} className={`transition-transform ${isOpen ? 'rotate-90 text-brand' : ''}`} />
-                          </button>
-                          {isOpen && (
-                            <div className="grid gap-4 p-4 sm:grid-cols-2">
-                              {fields.map(field => (
-                                <MedicalFieldControl
-                                  key={field.id}
-                                  moduleId={activeModule.id}
-                                  field={field}
-                                  value={activeValues[field.id] || ''}
-                                  onChange={updateField}
-                                  onToggleChip={toggleChip}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="space-y-4">
-                    {activeModule.allowAttachments && (
-                      <div>
-                        <label
-                          className={`file-upload block ${draggingModule === activeModule.id ? 'dragging' : ''}`}
-                          onDragEnter={(event) => {
-                            event.preventDefault();
-                            setDraggingModule(activeModule.id);
-                          }}
-                          onDragOver={(event) => event.preventDefault()}
-                          onDragLeave={() => setDraggingModule(null)}
-                          onDrop={(event) => {
-                            event.preventDefault();
-                            setDraggingModule(null);
-                            addFiles(activeModule.id, event.dataTransfer.files);
-                          }}
-                        >
-                          <UploadCloud className="mx-auto mb-3 text-n-400" size={34} />
-                          <div className="text-sm font-bold text-n-800">Upload reports</div>
-                          <div className="mt-1 text-xs text-n-500">PDF, image, scan, or camera upload</div>
-                          <input
-                            type="file"
-                            className="sr-only"
-                            accept="application/pdf,image/*"
-                            multiple
-                            capture="environment"
-                            onChange={(event) => {
-                              if (event.target.files) addFiles(activeModule.id, event.target.files);
-                              event.currentTarget.value = '';
-                            }}
-                          />
-                        </label>
-                      </div>
-                    )}
-
-                    {activeWorkflow.uploads.length > 0 ? (
-                      <div className="space-y-2">
-                        {activeWorkflow.uploads.map(upload => (
-                          <div key={upload.id} className="flex items-center gap-3 rounded-lg border border-n-200 bg-white p-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-lt text-brand">
-                              <FileText size={18} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-semibold text-n-900">{upload.name}</div>
-                              <div className="font-mono text-[11px] text-n-500">{formatFileSize(upload.size)}</div>
-                            </div>
-                            <button type="button" className="btn btn-icon btn-sm btn-secondary" aria-label="Delete report" onClick={() => removeUpload(activeModule.id, upload.id)}>
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="rounded-lg border border-dashed border-n-200 bg-n-50 p-4 text-sm text-n-500">
-                        <Paperclip className="mb-2 text-n-400" size={18} />
-                        No attachments
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="sticky bottom-20 z-20 -mx-4 border-t border-n-100 bg-white/95 px-4 py-4 backdrop-blur md:static md:mx-0 md:flex md:justify-end md:border-t">
-                  <button
-                    type="button"
-                    className={`btn ${savedSections[activeModule.id] ? 'btn-secondary border-brand-m text-brand' : 'btn-primary'} btn-lg w-full md:w-auto ${savingSections[activeModule.id] ? 'btn-loading' : ''}`}
-                    onClick={() => saveModule(activeModule)}
-                    disabled={savingSections[activeModule.id]}
-                  >
-                    {savedSections[activeModule.id] ? (
-                      <>
-                        <Check size={18} /> Saved
-                      </>
-                    ) : (
-                      <>
-                        <Save size={18} /> Save {activeModule.title}
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+        <section className="hidden space-y-4 lg:block">
+          <ModuleWorkspace
+            activeModule={activeModule}
+            activeWorkflow={activeWorkflow}
+            activeValues={activeValues}
+            activeGroups={activeGroups}
+            activeClinicalStatus={activeClinicalStatus}
+            providersForActive={providersForActive}
+            saved={!!savedSections[activeModule.id]}
+            saving={!!savingSections[activeModule.id]}
+            openGroups={openGroups}
+            draggingModule={draggingModule}
+            onUpdateWorkflow={updateWorkflow}
+            onUpdateField={updateField}
+            onToggleChip={toggleChip}
+            onSetOpenGroups={setOpenGroups}
+            onSetDraggingModule={setDraggingModule}
+            onAddFiles={addFiles}
+            onRemoveUpload={removeUpload}
+            onSave={() => saveModule(activeModule)}
+          />
 
           {validationError && (
             <div className="rounded-lg border border-rose-m bg-rose-lt p-4 text-sm font-semibold text-rose">
@@ -619,6 +477,62 @@ export default function AppointmentDetailPage() {
         </section>
       </div>
 
+      {validationError && (
+        <div className="mt-4 rounded-lg border border-rose-m bg-rose-lt p-4 text-sm font-semibold text-rose lg:hidden">
+          <Activity className="mr-2 inline" size={18} />
+          {validationError}
+        </div>
+      )}
+
+      {submitSuccess && (
+        <div className="mt-4 rounded-lg border border-green-m bg-green-lt p-4 text-sm font-semibold text-green lg:hidden">
+          <CheckCircle2 className="mr-2 inline" size={18} />
+          Submitted
+        </div>
+      )}
+
+      {mobileWorkspaceOpen && activeWorkflow && (
+        <div className="fixed inset-0 z-[70] bg-n-900/35 lg:hidden" role="dialog" aria-modal="true">
+          <div className="absolute inset-x-0 bottom-0 flex max-h-[94dvh] flex-col rounded-t-[22px] bg-white shadow-xl">
+            <div className="flex items-center justify-between gap-3 border-b border-n-100 px-4 py-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand">{categoryLabels[activeModule.providerCategory]}</div>
+                <h2 className="truncate text-lg font-bold text-n-900">{activeModule.title}</h2>
+              </div>
+              <button type="button" className="btn btn-icon btn-secondary" aria-label="Close module" onClick={() => setMobileWorkspaceOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <ModuleWorkspace
+                activeModule={activeModule}
+                activeWorkflow={activeWorkflow}
+                activeValues={activeValues}
+                activeGroups={activeGroups}
+                activeClinicalStatus={activeClinicalStatus}
+                providersForActive={providersForActive}
+                saved={!!savedSections[activeModule.id]}
+                saving={!!savingSections[activeModule.id]}
+                openGroups={openGroups}
+                draggingModule={draggingModule}
+                compact
+                onUpdateWorkflow={updateWorkflow}
+                onUpdateField={updateField}
+                onToggleChip={toggleChip}
+                onSetOpenGroups={setOpenGroups}
+                onSetDraggingModule={setDraggingModule}
+                onAddFiles={addFiles}
+                onRemoveUpload={removeUpload}
+                onSave={async () => {
+                  await saveModule(activeModule);
+                  setMobileWorkspaceOpen(false);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-n-200 bg-white p-4 md:left-auto md:rounded-tl-xl md:border-l md:px-5">
         <div className="mx-auto flex max-w-6xl justify-end">
           <button
@@ -628,6 +542,227 @@ export default function AppointmentDetailPage() {
             disabled={isSubmitting || submitSuccess}
           >
             Finalize Submission
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModuleWorkspace({
+  activeModule,
+  activeWorkflow,
+  activeValues,
+  activeGroups,
+  activeClinicalStatus,
+  providersForActive,
+  saved,
+  saving,
+  openGroups,
+  draggingModule,
+  compact = false,
+  onUpdateWorkflow,
+  onUpdateField,
+  onToggleChip,
+  onSetOpenGroups,
+  onSetDraggingModule,
+  onAddFiles,
+  onRemoveUpload,
+  onSave,
+}: {
+  activeModule: MedicalModuleSchema;
+  activeWorkflow?: TestWorkflowState;
+  activeValues: Record<string, string>;
+  activeGroups: Record<string, MedicalField[]>;
+  activeClinicalStatus: ClinicalStatus;
+  providersForActive: HealthProvider[];
+  saved: boolean;
+  saving: boolean;
+  openGroups: Record<string, boolean>;
+  draggingModule: string | null;
+  compact?: boolean;
+  onUpdateWorkflow: (moduleId: string, next: Partial<TestWorkflowState>) => void;
+  onUpdateField: (moduleId: string, fieldId: string, value: string) => void;
+  onToggleChip: (moduleId: string, fieldId: string, option: string) => void;
+  onSetOpenGroups: (updater: (prev: Record<string, boolean>) => Record<string, boolean>) => void;
+  onSetDraggingModule: (moduleId: string | null) => void;
+  onAddFiles: (moduleId: string, files: FileList | File[]) => void;
+  onRemoveUpload: (moduleId: string, uploadId: string) => void;
+  onSave: () => void | Promise<void>;
+}) {
+  if (!activeWorkflow) return null;
+
+  return (
+    <div className={compact ? 'bg-white' : 'ds-card p-0'}>
+      {!compact && (
+        <div className="border-b border-n-100 bg-n-50 px-4 py-4 md:px-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-[0.12em] text-brand">{categoryLabels[activeModule.providerCategory]}</div>
+              <h2 className="mt-1 text-xl font-bold text-n-900">{activeModule.title}</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className={`badge ${clinicalStatusClass[activeClinicalStatus]}`}>{activeClinicalStatus}</span>
+              <span className={`badge ${workflowBadgeClass[activeWorkflow.collection_status]}`}>{activeWorkflow.collection_status}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {compact && (
+        <div className="flex flex-wrap gap-2 px-4 pt-4">
+          <span className={`badge ${clinicalStatusClass[activeClinicalStatus]}`}>{activeClinicalStatus}</span>
+          <span className={`badge ${workflowBadgeClass[activeWorkflow.collection_status]}`}>{activeWorkflow.collection_status}</span>
+        </div>
+      )}
+
+      <div className={`space-y-5 ${compact ? 'p-4 pb-24' : 'p-4 md:p-5'}`}>
+        <div className="grid gap-3 sm:grid-cols-3 md:gap-4">
+          <div className="ds-field">
+            <label className="ds-label">Provider</label>
+            <select
+              className="ds-input"
+              value={activeWorkflow.provider_id}
+              onChange={(event) => onUpdateWorkflow(activeModule.id, { provider_id: event.target.value })}
+            >
+              {providersForActive.map(provider => (
+                <option key={provider.id} value={provider.id}>{provider.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="ds-field">
+            <label className="ds-label">Collection Status</label>
+            <select
+              className="ds-input"
+              value={activeWorkflow.collection_status}
+              onChange={(event) => onUpdateWorkflow(activeModule.id, { collection_status: event.target.value as SampleCollectionStatus })}
+            >
+              {collectionStatuses.map(status => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </div>
+          <div className="ds-field">
+            <label className="ds-label">Report Status</label>
+            <select
+              className="ds-input"
+              value={activeWorkflow.report_status}
+              onChange={(event) => onUpdateWorkflow(activeModule.id, { report_status: event.target.value as ReportStatus })}
+            >
+              {reportStatuses.map(status => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className={`grid gap-4 ${compact ? '' : 'xl:grid-cols-[1fr_300px]'}`}>
+          <div className="space-y-3 md:space-y-4">
+            {Object.entries(activeGroups).map(([groupName, fields]) => {
+              const groupKey = `${activeModule.id}:${groupName}`;
+              const isOpen = openGroups[groupKey] ?? true;
+              return (
+                <div key={groupName} className="clinical-field-group">
+                  <button
+                    type="button"
+                    className="clinical-field-group-title flex min-h-12 w-full touch-manipulation items-center justify-between text-left"
+                    onClick={() => onSetOpenGroups(prev => ({ ...prev, [groupKey]: !isOpen }))}
+                  >
+                    <span>{groupName}</span>
+                    <ChevronRight size={15} className={`transition-transform ${isOpen ? 'rotate-90 text-brand' : ''}`} />
+                  </button>
+                  {isOpen && (
+                    <div className="grid grid-cols-2 gap-3 p-3 md:gap-4 md:p-4">
+                      {fields.map(field => (
+                        <MedicalFieldControl
+                          key={field.id}
+                          moduleId={activeModule.id}
+                          field={field}
+                          value={activeValues[field.id] || ''}
+                          onChange={onUpdateField}
+                          onToggleChip={onToggleChip}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="space-y-4">
+            {activeModule.allowAttachments && (
+              <div>
+                <label
+                  className={`file-upload block ${draggingModule === activeModule.id ? 'dragging' : ''}`}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    onSetDraggingModule(activeModule.id);
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDragLeave={() => onSetDraggingModule(null)}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    onSetDraggingModule(null);
+                    onAddFiles(activeModule.id, event.dataTransfer.files);
+                  }}
+                >
+                  <UploadCloud className="mx-auto mb-2 text-n-400" size={30} />
+                  <div className="text-sm font-bold text-n-800">Upload reports</div>
+                  <div className="mt-1 text-xs text-n-500">PDF, image, scan, or camera upload</div>
+                  <input
+                    type="file"
+                    className="sr-only"
+                    accept="application/pdf,image/*"
+                    multiple
+                    capture="environment"
+                    onChange={(event) => {
+                      if (event.target.files) onAddFiles(activeModule.id, event.target.files);
+                      event.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+            )}
+
+            {activeWorkflow.uploads.length > 0 ? (
+              <div className="space-y-2">
+                {activeWorkflow.uploads.map(upload => (
+                  <div key={upload.id} className="flex items-center gap-3 rounded-lg border border-n-200 bg-white p-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-lt text-brand">
+                      <FileText size={18} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-n-900">{upload.name}</div>
+                      <div className="font-mono text-[11px] text-n-500">{formatFileSize(upload.size)}</div>
+                    </div>
+                    <button type="button" className="btn btn-icon btn-sm btn-secondary" aria-label="Delete report" onClick={() => onRemoveUpload(activeModule.id, upload.id)}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-n-200 bg-n-50 p-4 text-sm text-n-500">
+                <Paperclip className="mb-2 text-n-400" size={18} />
+                No attachments
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className={`${compact ? 'fixed inset-x-0 bottom-0 z-[75] border-t border-n-200 bg-white p-4' : 'sticky bottom-20 z-20 -mx-4 border-t border-n-100 bg-white/95 px-4 py-4 backdrop-blur md:static md:mx-0 md:flex md:justify-end md:border-t'}`}>
+          <button
+            type="button"
+            className={`btn ${saved ? 'btn-secondary border-brand-m text-brand' : 'btn-primary'} btn-lg w-full md:w-auto ${saving ? 'btn-loading' : ''}`}
+            onClick={() => void onSave()}
+            disabled={saving}
+          >
+            {saved ? (
+              <>
+                <Check size={18} /> Saved
+              </>
+            ) : (
+              <>
+                <Save size={18} /> Save {activeModule.title}
+              </>
+            )}
           </button>
         </div>
       </div>

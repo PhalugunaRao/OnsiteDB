@@ -115,7 +115,7 @@
 
     --r-sm: 6px;
     --r-md: 10px;
-    --r-lg: 14px;
+    --r-lg: 16px;
     --r-xl: 20px;
     --r-pill: 999px;
 
@@ -208,7 +208,7 @@
     font-size: 14px;
     color: var(--n-900);
     transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
-    min-height: 42px;
+    min-height: 48px;
   }
 
   select.ds-input {
@@ -289,6 +289,7 @@
     line-height: 1;
     cursor: pointer;
     border: 1px solid transparent;
+    min-height: 44px;
     transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
     user-select: none;
   }
@@ -398,6 +399,7 @@
     padding: 7px 14px;
     font-size: 12px;
     gap: 6px;
+    min-height: 36px;
   }
 
   .btn-lg {
@@ -408,8 +410,8 @@
   }
 
   .btn-icon {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     padding: 9px;
   }
 
