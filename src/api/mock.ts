@@ -22,27 +22,43 @@ const mockPackages: Package[] = [
     id: 'pkg-1',
     name: 'Comprehensive Health Package',
     components: [
-      { id: 'comp-v1', name: 'Blood Pressure (Systolic)', section: 'Vitals', type: 'numeric', required: true },
-      { id: 'comp-v2', name: 'Blood Pressure (Diastolic)', section: 'Vitals', type: 'numeric', required: true },
-      { id: 'comp-v3', name: 'Weight (kg)', section: 'Vitals', type: 'numeric', required: true },
-      { id: 'comp-v4', name: 'Height (cm)', section: 'Vitals', type: 'numeric', required: true },
-      { id: 'comp-v5', name: 'Pulse Rate', section: 'Vitals', type: 'numeric', required: true },
+      { id: 'comp-v1', name: 'Blood Pressure (Systolic)', section: 'Vitals/BP', type: 'numeric', required: true },
+      { id: 'comp-v2', name: 'Blood Pressure (Diastolic)', section: 'Vitals/BP', type: 'numeric', required: true },
+      { id: 'comp-v3', name: 'Weight (kg)', section: 'Vitals/BP', type: 'numeric', required: true },
+      { id: 'comp-v4', name: 'Height (cm)', section: 'Vitals/BP', type: 'numeric', required: true },
+      { id: 'comp-v5', name: 'Pulse Rate', section: 'Vitals/BP', type: 'numeric', required: true },
       
-      { id: 'comp-cbc1', name: 'Hemoglobin', section: 'Complete Blood Picture', type: 'numeric', required: true },
-      { id: 'comp-cbc2', name: 'RBC Count', section: 'Complete Blood Picture', type: 'numeric', required: true },
-      { id: 'comp-cbc3', name: 'WBC Count', section: 'Complete Blood Picture', type: 'numeric', required: true },
-      { id: 'comp-cbc4', name: 'Platelet Count', section: 'Complete Blood Picture', type: 'numeric', required: true },
+      { id: 'comp-b1', name: 'Hemoglobin', section: 'Blood', type: 'numeric', required: true },
+      { id: 'comp-b2', name: 'RBC Count', section: 'Blood', type: 'numeric', required: true },
+      { id: 'comp-b3', name: 'WBC Count', section: 'Blood', type: 'numeric', required: true },
+      { id: 'comp-b4', name: 'Platelet Count', section: 'Blood', type: 'numeric', required: true },
       
-      { id: 'comp-kft1', name: 'Blood Urea', section: 'Kidney Function Test', type: 'numeric', required: true },
-      { id: 'comp-kft2', name: 'Creatinine', section: 'Kidney Function Test', type: 'numeric', required: true },
-      { id: 'comp-kft3', name: 'Uric Acid', section: 'Kidney Function Test', type: 'numeric', required: true },
+      { id: 'comp-u1', name: 'Color', section: 'Urine', type: 'text', required: true },
+      { id: 'comp-u2', name: 'Appearance', section: 'Urine', type: 'text', required: true },
       
-      { id: 'comp-lft1', name: 'ALT/SGPT', section: 'Liver Function Test', type: 'numeric', required: true },
-      { id: 'comp-lft2', name: 'AST/SGOT', section: 'Liver Function Test', type: 'numeric', required: true },
-      { id: 'comp-lft3', name: 'Bilirubin', section: 'Liver Function Test', type: 'numeric', required: true },
+      { id: 'comp-bca1', name: 'Body Fat %', section: 'BCA', type: 'numeric', required: true },
       
-      { id: 'comp-db1', name: 'Fasting Blood Sugar', section: 'Blood Glucose & Diabetes', type: 'numeric', required: true },
-      { id: 'comp-db2', name: 'HbA1c', section: 'Blood Glucose & Diabetes', type: 'numeric', required: true },
+      { id: 'comp-bmd1', name: 'T-Score', section: 'BMD', type: 'numeric', required: true },
+      
+      { id: 'comp-vis1', name: 'Left Eye', section: 'Vision', type: 'text', required: true },
+      { id: 'comp-vis2', name: 'Right Eye', section: 'Vision', type: 'text', required: true },
+      
+      { id: 'comp-ecg1', name: 'Test Result', section: 'ECG', type: 'text', required: true },
+      { id: 'comp-ecg2', name: 'Doctor Remarks', section: 'ECG', type: 'text', required: true },
+      
+      { id: 'comp-hr1', name: 'Hearing Left', section: 'Hearing', type: 'text', required: true },
+      { id: 'comp-hr2', name: 'Hearing Right', section: 'Hearing', type: 'text', required: true },
+      
+      { id: 'comp-pft1', name: 'FEV1', section: 'PFT', type: 'numeric', required: true },
+      { id: 'comp-pft2', name: 'FVC', section: 'PFT', type: 'numeric', required: true },
+      
+      { id: 'comp-xray1', name: 'X-Ray Result', section: 'X-Ray', type: 'text', required: true },
+      
+      { id: 'comp-vac1', name: 'Vaccination Status', section: 'Vaccination', type: 'text', required: true },
+      
+      { id: 'comp-fit1', name: 'Fitness Level', section: 'Fitness', type: 'text', required: true },
+      
+      { id: 'comp-ses1', name: 'Session Notes', section: 'Session', type: 'text', required: true },
     ]
   }
 ];
@@ -108,7 +124,8 @@ export const api = {
     const matchedUsers = mockUsers.filter(u => 
       u.email.toLowerCase().includes(lowerQuery) || 
       u.mobile_number.includes(lowerQuery) || 
-      u.full_name.toLowerCase().includes(lowerQuery)
+      u.full_name.toLowerCase().includes(lowerQuery) ||
+      u.employee_id.toLowerCase().includes(lowerQuery)
     );
     const matchedUserIds = new Set(matchedUsers.map(u => u.id));
     

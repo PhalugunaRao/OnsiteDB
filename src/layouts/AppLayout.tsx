@@ -1,13 +1,30 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { LogOut, Activity } from 'lucide-react';
+import { LogOut, Activity, ArrowLeft } from 'lucide-react';
 
 export default function AppLayout() {
   const { agent, selectedCamp, logout } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const showBackButton = location.pathname !== '/' && location.pathname !== '/login' && location.pathname !== '/camp-selection';
+  const getBackTarget = () => {
+    const from = location.state?.from;
+    const pathname = location.pathname;
+
+    if (pathname === '/') return '/select-camp';
+    if (pathname === '/select-camp') return selectedCamp ? '/' : '/login';
+    if (pathname.startsWith('/appointment/')) return typeof from === 'string' ? from : '/';
+    if (pathname.startsWith('/component-entry/')) return typeof from === 'string' ? from : '/';
+    if (pathname.startsWith('/booking-review/')) return typeof from === 'string' ? from : '/';
+    if (pathname === '/search' || pathname === '/failures') return '/';
+    return typeof from === 'string' ? from : '/';
+  };
+
+  const showBackButton = location.pathname !== '/login';
+
+  const handleBack = () => {
+    navigate(getBackTarget());
+  };
 
   const handleLogout = () => {
     logout();
@@ -16,53 +33,50 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-n-50">
-      <header className="sticky top-0 z-50 bg-n-0 border-b border-n-200 shadow-sm h-[60px] flex items-center px-6">
+      <header className="sticky top-0 z-50 bg-white border-b border-n-200 shadow-sm h-14 flex items-center px-4 md:px-6">
         <div className="flex items-center gap-3">
           {showBackButton && (
             <button 
-              onClick={() => navigate(-1)} 
-              className="mr-2 p-2 text-n-600 hover:text-brand bg-n-50 hover:bg-brand-lt rounded-md transition-colors md:hidden"
+              onClick={handleBack}
+              className="mr-1 inline-flex h-9 w-9 items-center justify-center rounded-md border border-n-200 bg-white text-n-600 transition-colors hover:border-brand-m hover:bg-brand-lt hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               aria-label="Go back"
             >
-              ←
+              <ArrowLeft size={18} />
             </button>
           )}
-          <div className="w-8 h-8 rounded bg-brand-lt text-brand flex items-center justify-center">
-            <Activity size={18} />
+          <div className="w-7 h-7 rounded bg-brand-lt text-brand flex items-center justify-center">
+            <Activity size={16} />
           </div>
-          <span className="font-semibold text-n-900 hidden sm:inline">Onsite Dashboard</span>
+          <Link to="/" className="font-semibold text-n-900 hidden sm:inline hover:text-brand transition-colors">
+            Dashboard
+          </Link>
         </div>
 
-        {selectedCamp && (
-          <div className="ml-10 hidden md:flex items-center gap-6 text-sm">
-            <Link to="/" className="text-n-600 hover:text-brand font-medium">Dashboard</Link>
-            <Link to="/failures" className="text-n-600 hover:text-brand font-medium">Retry Queue</Link>
-          </div>
-        )}
-
-        <div className="ml-auto flex items-center gap-6">
+        <div className="ml-auto flex items-center gap-4">
           {selectedCamp && (
-            <div className="flex flex-col items-end">
-              <span className="text-xs font-semibold tracking-wider uppercase text-brand">Active Camp</span>
-              <span className="text-sm font-medium text-n-900">{selectedCamp.name}</span>
-            </div>
+            <>
+              <div className="hidden sm:block">
+                <span className="text-sm font-medium text-n-900 bg-n-50 px-3 py-1.5 rounded-full border border-n-200">
+                  {selectedCamp.name}
+                </span>
+              </div>
+              <div className="h-5 w-px bg-n-200 hidden sm:block"></div>
+            </>
           )}
           
-          <div className="h-8 w-px bg-n-200 hidden md:block"></div>
-          
-          <div className="flex items-center gap-4">
-            <div className="flex flex-col items-end">
-              <span className="text-xs text-n-500">{agent?.role}</span>
-              <span className="text-sm font-medium text-n-800">{agent?.name}</span>
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex flex-col items-end">
+              <span className="text-[10px] font-semibold tracking-wider text-n-500 uppercase">{agent?.role}</span>
+              <span className="text-sm font-medium text-n-900 leading-tight">{agent?.name}</span>
             </div>
-            <button onClick={handleLogout} className="text-n-500 hover:text-n-900 transition-colors p-2">
+            <button onClick={handleLogout} className="text-n-500 hover:text-brand transition-colors p-1.5 rounded-md hover:bg-n-50" title="Logout">
               <LogOut size={18} />
             </button>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-6xl w-full mx-auto p-6 md:p-8">
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 lg:p-8">
         <Outlet />
       </main>
     </div>
