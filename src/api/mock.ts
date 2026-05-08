@@ -2,6 +2,8 @@ import type { Agent, Appointment, Camp, ComponentEntry, HealthProvider, Package,
 
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const OTP_TTL_MS = 2 * 60 * 1000;
+const MAX_OTP_ATTEMPTS = 5;
 
 const normalizeIndianMobile = (value: string) => {
   const trimmed = value.trim();
@@ -10,6 +12,20 @@ const normalizeIndianMobile = (value: string) => {
 };
 
 const isValidIndianMobile = (value: string) => /^[6-9]\d{9}$/.test(normalizeIndianMobile(value));
+
+const otpSessions = new Map<string, { otp: string; expiresAt: number; attempts: number; blockedUntil?: number }>();
+
+const createOtpSession = (mobile: string) => {
+  const existing = otpSessions.get(mobile);
+  if (existing?.blockedUntil && existing.blockedUntil > Date.now()) {
+    throw new Error('Too many attempts. Try again shortly.');
+  }
+  otpSessions.set(mobile, {
+    otp: '123456',
+    expiresAt: Date.now() + OTP_TTL_MS,
+    attempts: 0,
+  });
+};
 
 const mockAgents: Agent[] = [
   { id: 'agent-1', name: 'John Doe', mobile_number: '9999999999', role: 'Camp Partner Agent', is_active: true },
@@ -151,16 +167,42 @@ export const api = {
     const normalizedMobile = normalizeIndianMobile(mobile);
     const agent = mockAgents.find(a => a.mobile_number === normalizedMobile);
     if (!agent) throw new Error('Agent not found');
+    createOtpSession(normalizedMobile);
+    return { success: true };
+  },
+
+  resendOtp: async (mobile: string) => {
+    await delay(400);
+    const normalizedMobile = normalizeIndianMobile(mobile);
+    const agent = mockAgents.find(a => a.mobile_number === normalizedMobile);
+    if (!agent) throw new Error('Agent not found');
+    createOtpSession(normalizedMobile);
     return { success: true };
   },
   
   verifyOtp: async (mobile: string, otp: string) => {
     await delay(500);
-    if (otp !== '123456') throw new Error('Invalid OTP');
     const normalizedMobile = normalizeIndianMobile(mobile);
+    const session = otpSessions.get(normalizedMobile);
+    if (!session) throw new Error('OTP expired');
+    if (session.blockedUntil && session.blockedUntil > Date.now()) throw new Error('Too many attempts. Try again shortly.');
+    if (session.expiresAt < Date.now()) {
+      otpSessions.delete(normalizedMobile);
+      throw new Error('OTP expired');
+    }
+    if (otp !== session.otp) {
+      const attempts = session.attempts + 1;
+      otpSessions.set(normalizedMobile, {
+        ...session,
+        attempts,
+        blockedUntil: attempts >= MAX_OTP_ATTEMPTS ? Date.now() + 60_000 : undefined,
+      });
+      throw new Error('Invalid OTP');
+    }
     const agent = mockAgents.find(a => a.mobile_number === normalizedMobile);
     const activeCamps = mockCamps.filter(c => c.status === 'active');
     if (activeCamps.length === 0) throw new Error('No active camp mapped for this agent');
+    otpSessions.delete(normalizedMobile);
     return { agent, activeCamps };
   },
 

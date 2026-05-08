@@ -1,29 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ClipboardEvent, FormEvent, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, ArrowLeft, Phone, RotateCcw, ShieldCheck } from 'lucide-react';
+import { Activity, ArrowLeft, CheckCircle2, Phone, RotateCcw, ShieldCheck } from 'lucide-react';
 
 import { api } from '../api/mock';
 import { useStore } from '../store';
 
-const indianMobilePattern = /^(\+91)?[6-9]\d{9}$/;
+const countries = [
+  { code: 'IN', name: 'India', dialCode: '+91', pattern: /^[6-9]\d{9}$/ },
+];
 
-const normalizeIndianMobile = (value: string) => {
-  const compact = value.replace(/[\s-]/g, '').trim();
-  return compact.startsWith('+91') ? compact.slice(3) : compact;
-};
+const formatCountdown = (seconds: number) => `00:${String(seconds).padStart(2, '0')}`;
 
-const getMobileError = (value: string) => {
-  const compact = value.replace(/[\s-]/g, '').trim();
-  if (!compact) return 'Mobile number is required.';
-  if (compact.startsWith('+') && !compact.startsWith('+91')) return 'Only Indian mobile numbers with +91 are supported.';
-  if (!/^(\+91)?\d+$/.test(compact)) return 'Use digits only, with optional +91 prefix.';
-  if (!indianMobilePattern.test(compact)) return 'Enter a 10-digit Indian number starting with 6, 7, 8, or 9.';
+const normalizeMobile = (value: string) => value.replace(/\D/g, '').slice(0, 10);
+
+const getMobileError = (value: string, touched: boolean) => {
+  if (!value) return touched ? 'Mobile number required' : '';
+  if (value.length !== 10 || !countries[0].pattern.test(value)) return 'Enter valid mobile number';
   return '';
 };
 
 export default function LoginPage() {
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [selectedCountryCode, setSelectedCountryCode] = useState('IN');
   const [mobileInput, setMobileInput] = useState('');
   const [verifiedMobile, setVerifiedMobile] = useState('');
   const [otpDigits, setOtpDigits] = useState(Array(6).fill(''));
@@ -31,36 +30,53 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  const [authSuccess, setAuthSuccess] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  const [otpErrorNonce, setOtpErrorNonce] = useState(0);
+  const mobileRef = useRef<HTMLInputElement | null>(null);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
   const setAgent = useStore(state => state.setAgent);
   const setActiveCamps = useStore(state => state.setActiveCamps);
   const navigate = useNavigate();
 
-  const mobileError = useMemo(() => getMobileError(mobileInput), [mobileInput]);
+  const selectedCountry = countries.find(country => country.code === selectedCountryCode) || countries[0];
+  const mobileError = useMemo(() => getMobileError(mobileInput, touchedMobile), [mobileInput, touchedMobile]);
+  const isMobileValid = selectedCountry.pattern.test(mobileInput);
   const otp = otpDigits.join('');
-  const maskedMobile = verifiedMobile ? `+91 ${verifiedMobile.slice(0, 2)}****${verifiedMobile.slice(-4)}` : '';
+  const maskedMobile = verifiedMobile ? `${selectedCountry.dialCode} ${verifiedMobile.slice(0, 2)}****${verifiedMobile.slice(-4)}` : '';
 
   useEffect(() => {
-    if (step === 'otp') {
-      window.setTimeout(() => otpRefs.current[0]?.focus(), 40);
-    }
+    window.setTimeout(() => mobileRef.current?.focus(), 60);
+  }, []);
+
+  useEffect(() => {
+    if (step === 'otp') window.setTimeout(() => otpRefs.current[0]?.focus(), 50);
   }, [step]);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendIn(current => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendIn]);
 
   const onPhoneSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setTouchedMobile(true);
     setErrorMsg('');
     setInfoMsg('');
-    if (mobileError) return;
+    if (!isMobileValid) return;
 
-    const normalizedMobile = normalizeIndianMobile(mobileInput);
     try {
       setLoading(true);
-      await api.validateAgent(normalizedMobile);
-      setVerifiedMobile(normalizedMobile);
+      await api.validateAgent(mobileInput);
+      setVerifiedMobile(mobileInput);
+      setOtpDigits(Array(6).fill(''));
+      setResendIn(30);
       setStep('otp');
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to validate agent.');
+      setErrorMsg(err instanceof Error ? err.message : 'Unable to send OTP');
     } finally {
       setLoading(false);
     }
@@ -75,13 +91,17 @@ export default function LoginPage() {
       setErrorMsg('');
       setInfoMsg('');
       const res = await api.verifyOtp(verifiedMobile, otp);
-      setAgent(res.agent!);
-      setActiveCamps(res.activeCamps);
-      navigate('/select-camp');
+      setAuthSuccess(true);
+      window.setTimeout(() => {
+        setAgent(res.agent!);
+        setActiveCamps(res.activeCamps);
+        navigate('/select-camp');
+      }, 350);
     } catch (err: unknown) {
       setOtpDigits(Array(6).fill(''));
+      setOtpErrorNonce(nonce => nonce + 1);
       otpRefs.current[0]?.focus();
-      setErrorMsg(err instanceof Error ? err.message : 'OTP verification failed.');
+      setErrorMsg(err instanceof Error ? err.message : 'Invalid OTP');
     } finally {
       setLoading(false);
     }
@@ -94,19 +114,14 @@ export default function LoginPage() {
       next[index] = digit;
       return next;
     });
+    setErrorMsg('');
     if (digit && index < 5) otpRefs.current[index + 1]?.focus();
   };
 
   const handleOtpKeyDown = (index: number, event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
-    if (event.key === 'ArrowLeft' && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
-    if (event.key === 'ArrowRight' && index < 5) {
-      otpRefs.current[index + 1]?.focus();
-    }
+    if (event.key === 'Backspace' && !otpDigits[index] && index > 0) otpRefs.current[index - 1]?.focus();
+    if (event.key === 'ArrowLeft' && index > 0) otpRefs.current[index - 1]?.focus();
+    if (event.key === 'ArrowRight' && index < 5) otpRefs.current[index + 1]?.focus();
   };
 
   const handleOtpPaste = (event: ClipboardEvent<HTMLInputElement>) => {
@@ -117,80 +132,108 @@ export default function LoginPage() {
     otpRefs.current[Math.min(pastedDigits.length, 6) - 1]?.focus();
   };
 
+  const resendOtp = async () => {
+    if (resendIn > 0 || loading) return;
+    try {
+      setLoading(true);
+      setErrorMsg('');
+      await api.resendOtp(verifiedMobile);
+      setOtpDigits(Array(6).fill(''));
+      setInfoMsg('OTP sent');
+      setResendIn(30);
+      otpRefs.current[0]?.focus();
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Unable to resend OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const goBackToMobile = () => {
     setStep('phone');
     setErrorMsg('');
     setInfoMsg('');
     setOtpDigits(Array(6).fill(''));
+    window.setTimeout(() => mobileRef.current?.focus(), 50);
   };
 
   return (
-    <div className="ds-card elevated mx-4 p-5 sm:mx-0 sm:p-8">
-      <div className="mb-8 text-center">
+    <div className="ds-card elevated mx-4 overflow-hidden p-0 sm:mx-0">
+      <div className="border-b border-n-100 bg-white px-5 py-7 text-center sm:px-8">
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-lt text-brand">
           <Activity size={26} />
         </div>
-        <h1 className="mt-3 text-[28px] font-bold leading-tight text-n-900">Onsite Healthcare</h1>
+        <h1 className="text-[26px] font-bold leading-tight text-n-900">Onsite Healthcare</h1>
       </div>
 
-      {errorMsg && (
-        <div className="mb-5 rounded-md border border-rose-m bg-rose-lt p-3 text-sm font-medium text-rose">
-          {errorMsg}
-        </div>
-      )}
-
-      {infoMsg && (
-        <div className="mb-5 rounded-md border border-green-m bg-green-lt p-3 text-sm font-medium text-green">
-          {infoMsg}
-        </div>
-      )}
-
-      {step === 'phone' ? (
-        <form onSubmit={onPhoneSubmit} className="space-y-5">
-          <div className="ds-field">
-            <label htmlFor="mobile" className="ds-label">Mobile Number</label>
-            <div className="relative">
-              <Phone className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-n-400" size={18} />
-              <input
-                id="mobile"
-                className="ds-input pl-10 text-base"
-                placeholder="Enter Indian Mobile Number"
-                inputMode="tel"
-                autoComplete="tel"
-                value={mobileInput}
-                onBlur={() => setTouchedMobile(true)}
-                onChange={(event) => {
-                  setMobileInput(event.target.value);
-                  setErrorMsg('');
-                }}
-              />
-            </div>
-            {touchedMobile && mobileError ? (
-              <p className="ds-error">{mobileError}</p>
-            ) : (
-              <p className="ds-helper">Use +91XXXXXXXXXX or a 10-digit Indian number.</p>
-            )}
+      <div className="p-5 sm:p-8">
+        {errorMsg && (
+          <div key={otpErrorNonce} className="mb-5 rounded-md border border-rose-m bg-rose-lt p-3 text-sm font-semibold text-rose animate-shake">
+            {errorMsg}
           </div>
-          <button type="submit" disabled={loading || !!mobileError} className={`btn btn-primary btn-lg w-full ${loading ? 'btn-loading' : ''}`}>
-            Continue
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={onOtpSubmit} className="space-y-6">
-          <div className="text-center">
-            <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-green-lt text-green">
-              <ShieldCheck size={23} />
-            </div>
-            <h2 className="text-xl font-bold text-n-900">Verification</h2>
-            <p className="mt-2 text-sm leading-6 text-n-600">
-              Enter the 6-digit OTP sent to your mobile number
-              <span className="mt-1 block font-mono font-semibold text-n-900">{maskedMobile}</span>
-            </p>
-          </div>
+        )}
 
-          <div>
-            <label className="ds-label text-center">One Time Password</label>
-            <div className="mt-2 grid grid-cols-6 gap-2 sm:gap-3">
+        {infoMsg && (
+          <div className="mb-5 rounded-md border border-green-m bg-green-lt p-3 text-sm font-semibold text-green">
+            {infoMsg}
+          </div>
+        )}
+
+        {step === 'phone' ? (
+          <form onSubmit={onPhoneSubmit} className="space-y-5">
+            <div className="ds-field">
+              <label htmlFor="mobile" className="ds-label">Mobile Number</label>
+              <div className="flex rounded-md border border-n-200 bg-white shadow-sm transition focus-within:border-brand focus-within:ring-4 focus-within:ring-brand-m">
+                <select
+                  className="min-h-12 rounded-l-md border-0 border-r border-n-200 bg-n-50 px-3 text-sm font-semibold text-n-900 outline-none"
+                  value={selectedCountryCode}
+                  onChange={(event) => setSelectedCountryCode(event.target.value)}
+                  aria-label="Country code"
+                >
+                  {countries.map(country => (
+                    <option key={country.code} value={country.code}>{country.dialCode} {country.name}</option>
+                  ))}
+                </select>
+                <div className="relative min-w-0 flex-1">
+                  <Phone className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-n-400" size={18} />
+                  <input
+                    ref={mobileRef}
+                    id="mobile"
+                    className="h-12 w-full rounded-r-md border-0 bg-white pl-10 pr-3 text-base font-semibold text-n-900 outline-none placeholder:font-normal placeholder:text-n-400"
+                    placeholder="9876543210"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    maxLength={10}
+                    value={mobileInput}
+                    onBlur={() => setTouchedMobile(true)}
+                    onChange={(event) => {
+                      setMobileInput(normalizeMobile(event.target.value));
+                      setTouchedMobile(true);
+                      setErrorMsg('');
+                    }}
+                  />
+                </div>
+              </div>
+              {mobileError && <p className="ds-error">{mobileError}</p>}
+            </div>
+            <button type="submit" disabled={loading || !isMobileValid} className={`btn btn-primary btn-lg w-full ${loading ? 'btn-loading' : ''}`}>
+              Continue
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={onOtpSubmit} className="space-y-6">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-brand-lt text-brand">
+                {authSuccess ? <CheckCircle2 size={23} /> : <ShieldCheck size={23} />}
+              </div>
+              <h2 className="text-xl font-bold text-n-900">{authSuccess ? 'Verified' : 'Verification'}</h2>
+              <p className="mt-2 text-sm leading-6 text-n-600">
+                Enter the 6-digit OTP sent to
+                <span className="mt-1 block font-mono font-semibold text-n-900">{maskedMobile}</span>
+              </p>
+            </div>
+
+            <div className="grid grid-cols-6 gap-2 sm:gap-3">
               {otpDigits.map((digit, index) => (
                 <input
                   key={index}
@@ -201,6 +244,7 @@ export default function LoginPage() {
                   className="h-12 rounded-md border border-n-200 bg-white text-center font-mono text-xl font-bold text-n-900 shadow-sm transition focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-m sm:h-14"
                   inputMode="numeric"
                   autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                  enterKeyHint="done"
                   maxLength={1}
                   value={digit}
                   onChange={(event) => updateOtpDigit(index, event.target.value)}
@@ -209,30 +253,28 @@ export default function LoginPage() {
                 />
               ))}
             </div>
-          </div>
 
-          <button type="submit" disabled={loading || otp.length !== 6} className={`btn btn-primary btn-lg w-full ${loading ? 'btn-loading' : ''}`}>
-            Verify OTP
-          </button>
+            <button type="submit" disabled={loading || otp.length !== 6 || authSuccess} className={`btn btn-primary btn-lg w-full ${loading ? 'btn-loading' : ''}`}>
+              Verify OTP
+            </button>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <button type="button" onClick={goBackToMobile} className="btn btn-secondary w-full sm:w-auto">
-              <ArrowLeft size={16} /> Back
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setOtpDigits(Array(6).fill(''));
-                setInfoMsg('A fresh OTP has been sent.');
-                otpRefs.current[0]?.focus();
-              }}
-              className="btn btn-tertiary w-full sm:w-auto"
-            >
-              <RotateCcw size={16} /> Resend OTP
-            </button>
-          </div>
-        </form>
-      )}
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button type="button" onClick={goBackToMobile} className="btn btn-secondary w-full sm:w-auto">
+                <ArrowLeft size={16} /> Back
+              </button>
+              <button
+                type="button"
+                onClick={resendOtp}
+                disabled={resendIn > 0 || loading}
+                className="btn btn-tertiary w-full sm:w-auto"
+              >
+                <RotateCcw size={16} />
+                {resendIn > 0 ? `Resend OTP in ${formatCountdown(resendIn)}` : 'Resend OTP'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

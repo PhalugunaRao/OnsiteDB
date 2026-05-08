@@ -1,6 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { LogOut, Activity, ArrowLeft, MapPinned } from 'lucide-react';
+import { LogOut, Activity, ArrowLeft, MapPinned, LayoutDashboard, Search, CalendarCheck, ListRestart, UserCircle } from 'lucide-react';
 
 export default function AppLayout() {
   const { agent, selectedCamp, logout } = useStore();
@@ -30,6 +30,14 @@ export default function AppLayout() {
     logout();
     navigate('/login');
   };
+
+  const navItems = [
+    { to: '/', label: 'Dashboard', icon: LayoutDashboard, active: location.pathname === '/' },
+    { to: '/search', label: 'Search', icon: Search, active: location.pathname === '/search' },
+    { to: '/', label: 'Appts', icon: CalendarCheck, active: location.pathname.startsWith('/appointment/') },
+    { to: '/failures', label: 'Queue', icon: ListRestart, active: location.pathname === '/failures' },
+    { to: '/select-camp', label: 'Profile', icon: UserCircle, active: location.pathname === '/select-camp' },
+  ];
 
   return (
     <div className="flex min-h-screen flex-col bg-n-50">
@@ -77,9 +85,25 @@ export default function AppLayout() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:p-6 lg:p-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 p-4 pb-24 md:p-6 lg:p-8">
         <Outlet />
       </main>
+
+      <nav className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 gap-1 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 md:hidden" aria-label="Primary navigation">
+        {navItems.map(item => {
+          const Icon = item.icon;
+          return (
+            <Link
+              key={`${item.to}-${item.label}`}
+              to={item.to}
+              className={`mobile-nav-item ${item.active ? 'active' : ''}`}
+            >
+              <Icon size={19} />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }
