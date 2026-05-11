@@ -37,6 +37,17 @@ export interface AppointmentDetails {
   providers: HealthProvider[];
 }
 
+export interface TestResultComponentPayload {
+  id: string | number;
+  type: 'test_component';
+  result: string | number | boolean;
+  status: 'done';
+}
+
+export interface SaveTestResultsPayload {
+  components: TestResultComponentPayload[];
+}
+
 const extractAppointmentList = (payload: unknown) => {
   const source = asRecord(payload);
   if (source.customer || source.appointment) return [payload];
@@ -226,6 +237,28 @@ export const saveSampleCollection = async (
     });
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to save sample collection'), { cause: error });
+  }
+};
+
+export const saveTestResults = async (
+  campId: string,
+  appointmentId: string,
+  payload: SaveTestResultsPayload
+) => {
+  try {
+    const response = await apiClient.put(
+      `/v3/onsite/camps/${campId}/appointments/${appointmentId}/test_results`,
+      payload
+    );
+    if (import.meta.env.DEV) {
+      console.group('SAVE TEST RESULTS');
+      console.log('PAYLOAD', payload);
+      console.log('RESPONSE', response.data);
+      console.groupEnd();
+    }
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to save test results'), { cause: error });
   }
 };
 

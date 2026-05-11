@@ -332,6 +332,8 @@ export const normalizeTestModule = (section: unknown, index: number): MedicalMod
       options: normalizeStatusOptions<string>(item.options),
       normalRange: firstValue(item, ['normal_range', 'range', 'reference_range']),
       statusSensitive: Boolean(item.status_sensitive),
+      defaultValue: firstValue(item, ['result', 'result_value', 'value']),
+      resultReceived: Boolean(item.result_received),
     };
   });
 

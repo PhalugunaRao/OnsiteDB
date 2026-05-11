@@ -88,6 +88,8 @@ export interface MedicalField {
   options?: string[];
   normalRange?: string;
   statusSensitive?: boolean;
+  defaultValue?: string;
+  resultReceived?: boolean;
 }
 
 export interface MedicalModuleSchema {
@@ -123,7 +125,7 @@ export interface ComponentEntry {
   package_component_id: string;
   section_name: string;
   values: Record<string, unknown>;
-  status: 'draft_saved' | 'completed' | 'needs_correction';
+  status: 'draft_saved' | 'completed' | 'created' | 'needs_correction';
   saved_by: string;
   saved_at: string;
   last_modified_at: string;
@@ -163,6 +165,7 @@ export type SampleCollectionStatus =
   | 'Sent to Lab'
   | 'Processing'
   | 'Report Received'
+  | 'Created'
   | 'Uploaded'
   | 'Completed';
 

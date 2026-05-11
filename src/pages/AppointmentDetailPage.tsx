@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   Activity,
-  Check,
   CheckCircle2,
   ChevronRight,
   ClipboardCheck,
@@ -60,6 +59,7 @@ const workflowBadgeClass: Record<SampleCollectionStatus, string> = {
   'Sent to Lab': 'badge-info',
   Processing: 'badge-warn',
   'Report Received': 'badge-purple',
+  Created: 'badge-info',
   Uploaded: 'badge-ok',
   Completed: 'badge-ok',
 };
@@ -112,10 +112,19 @@ const getModuleProgress = (module: MedicalModuleSchema, values: Record<string, s
   };
 };
 
+const isModuleCompleted = (module: MedicalModuleSchema) => (
+  module.fields.length > 0 && module.fields.every(field => field.resultReceived)
+) || module.collectionStatus === 'Completed' || module.collectionStatus === 'Created';
+
 const createInitialFormData = (modules: MedicalModuleSchema[]) => {
   return Object.fromEntries(modules.map(module => [
     module.id,
-    { clinical_status: module.defaultStatus },
+    {
+      clinical_status: module.defaultStatus,
+      ...Object.fromEntries(module.fields
+        .filter(field => field.defaultValue !== undefined && field.defaultValue !== '')
+        .map(field => [field.id, field.defaultValue || ''])),
+    },
   ]));
 };
 
@@ -124,20 +133,55 @@ const createInitialOpenState = (modules: MedicalModuleSchema[]) => {
 };
 
 const createInitialWorkflow = (modules: MedicalModuleSchema[], providers: HealthProvider[], details?: AppointmentDetails | null) => {
-  return Object.fromEntries(modules.map(module => [
-    module.id,
-    {
+  return Object.fromEntries(modules.map(module => {
+    const relatedEntry = details?.entries.find(entry => entry.id === module.sampleCollectionId || entry.section_name === module.title);
+    const entryStatus = relatedEntry?.status === 'completed'
+      ? 'Completed'
+      : relatedEntry?.status === 'draft_saved' || relatedEntry?.status === 'created'
+        ? 'Created'
+        : undefined;
+    return [
+      module.id,
+      {
       provider_id: module.providerId || providers.find(provider => provider.category === module.providerCategory || provider.category === 'instant')?.id || '',
-      collection_status: module.collectionStatus || 'Pending' as SampleCollectionStatus,
+      collection_status: module.collectionStatus || entryStatus || 'Pending' as SampleCollectionStatus,
       report_status: module.reportStatus || 'Pending' as ReportStatus,
-      uploads: details?.entries.find(entry => entry.id === module.sampleCollectionId || entry.section_name === module.title)?.values.uploads as UploadedReport[] || [],
-    },
-  ]));
+      uploads: relatedEntry?.values.uploads as UploadedReport[] || [],
+      },
+    ];
+  }));
+};
+
+const createInitialSavedState = (modules: MedicalModuleSchema[], details?: AppointmentDetails | null) => (
+  Object.fromEntries(modules.map(module => {
+    const relatedEntry = details?.entries.find(entry => entry.id === module.sampleCollectionId || entry.section_name === module.title);
+    return [module.id, isModuleCompleted(module) || relatedEntry?.status === 'created' || relatedEntry?.status === 'completed'];
+  }))
+);
+
+const createInitialEditState = (modules: MedicalModuleSchema[], details?: AppointmentDetails | null) => (
+  Object.fromEntries(modules.map(module => {
+    const relatedEntry = details?.entries.find(entry => entry.id === module.sampleCollectionId || entry.section_name === module.title);
+    const saved = isModuleCompleted(module) || relatedEntry?.status === 'created' || relatedEntry?.status === 'completed';
+    return [module.id, !saved];
+  }))
+);
+
+const hasEnteredValue = (value?: string) => value !== undefined && value !== null && String(value).trim() !== '';
+
+const normalizeResultValue = (field: MedicalField, value: string) => {
+  if (field.type !== 'number') return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : value;
+};
+
+const toComponentId = (fieldId: string) => {
+  const numericId = Number(fieldId);
+  return Number.isFinite(numericId) && String(numericId) === fieldId ? numericId : fieldId;
 };
 
 export default function AppointmentDetailPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const selectedCamp = useStore(state => state.selectedCamp);
   const [details, setDetails] = useState<AppointmentDetails | null>(null);
   const [providers, setProviders] = useState<HealthProvider[]>([]);
@@ -145,11 +189,12 @@ export default function AppointmentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [savingSections, setSavingSections] = useState<Record<string, boolean>>({});
   const [savedSections, setSavedSections] = useState<Record<string, boolean>>({});
+  const [editingSections, setEditingSections] = useState<Record<string, boolean>>({});
   const [formData, setFormData] = useState<ModuleValues>({});
   const [workflow, setWorkflow] = useState<Record<string, TestWorkflowState>>({});
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitSuccess] = useState(false);
+  const [resultSuccessMsg, setResultSuccessMsg] = useState('');
   const [validationError, setValidationError] = useState('');
   const [activeModuleId, setActiveModuleId] = useState('');
   const [mobileWorkspaceOpen, setMobileWorkspaceOpen] = useState(false);
@@ -181,8 +226,9 @@ export default function AppointmentDetailPage() {
         setFormData(createInitialFormData(data.modules));
         setWorkflow(createInitialWorkflow(data.modules, data.providers, data));
         setOpenGroups(createInitialOpenState(data.modules));
-        setSavedSections({});
-        setActiveModuleId(data.modules[0]?.id || '');
+        setSavedSections(createInitialSavedState(data.modules, data));
+        setEditingSections(createInitialEditState(data.modules, data));
+        setActiveModuleId(data.modules.find(module => !isModuleCompleted(module))?.id || data.modules[0]?.id || '');
         setPackageListOpen(false);
       } catch (err) {
         console.error(err);
@@ -228,6 +274,8 @@ export default function AppointmentDetailPage() {
       },
     }));
     setSavedSections(prev => ({ ...prev, [moduleId]: false }));
+    setEditingSections(prev => ({ ...prev, [moduleId]: true }));
+    setResultSuccessMsg('');
   };
 
   const toggleChip = (moduleId: string, fieldId: string, option: string) => {
@@ -247,6 +295,8 @@ export default function AppointmentDetailPage() {
       },
     }));
     setSavedSections(prev => ({ ...prev, [moduleId]: false }));
+    setEditingSections(prev => ({ ...prev, [moduleId]: true }));
+    setResultSuccessMsg('');
     const module = modules.find(item => item.id === moduleId);
     if (next.provider_id && details && module?.appointmentTestId) {
       void api.updateAppointmentTestProvider(details.appointment.camp_id, details.appointment.id, module.appointmentTestId, {
@@ -287,64 +337,71 @@ export default function AppointmentDetailPage() {
 
   const saveModule = async (module: MedicalModuleSchema) => {
     if (!details) return;
-    const moduleWorkflow = workflow[module.id];
+    const values = valuesForModule(formData, module.id);
+    const components = module.fields
+      .filter(field => hasEnteredValue(values[field.id]))
+      .map(field => ({
+        id: toComponentId(field.id),
+        type: 'test_component' as const,
+        result: normalizeResultValue(field, values[field.id]),
+        status: 'done' as const,
+      }));
+
+    const missingField = module.fields.find(field => field.required && !hasEnteredValue(values[field.id]));
+    if (missingField) {
+      setValidationError(`${module.title}: ${missingField.label} is required.`);
+      return;
+    }
+
+    if (components.length === 0) {
+      setValidationError(`Enter at least one result for ${module.title}.`);
+      return;
+    }
+
     setSavingSections(prev => ({ ...prev, [module.id]: true }));
     setValidationError('');
+    setResultSuccessMsg('');
     try {
-      await api.saveComponentEntry(details.appointment.camp_id, details.appointment.id, module.sampleCollectionId || module.id, {
-        result_values: formData[module.id],
-        remarks: formData[module.id]?.doctor_remarks || formData[module.id]?.remarks || '',
-        status: moduleWorkflow?.collection_status || 'Pending',
-        report_status: moduleWorkflow?.report_status || 'Pending',
-        provider_info: {
-          provider_id: moduleWorkflow?.provider_id,
-        },
-        attachments: moduleWorkflow?.uploads || [],
-      });
+      const response = await api.saveTestResults(details.appointment.camp_id, details.appointment.id, { components });
+      const responseAppointment = response && typeof response === 'object' ? (response as { appointment?: unknown; message?: unknown }).appointment : null;
+      const appointmentTests = responseAppointment && typeof responseAppointment === 'object'
+        ? (responseAppointment as { appointment_tests?: unknown }).appointment_tests
+        : null;
+      const completedIds = new Set(components.map(component => String(component.id)));
+      if (Array.isArray(appointmentTests)) {
+        appointmentTests.forEach(test => {
+          if (test && typeof test === 'object') {
+            const item = test as { id?: unknown; result_received?: unknown };
+            if (item.result_received) completedIds.add(String(item.id));
+          }
+        });
+      }
+      setModules(prev => prev.map(currentModule => currentModule.id === module.id
+        ? {
+          ...currentModule,
+          fields: currentModule.fields.map(field => completedIds.has(field.id)
+            ? { ...field, resultReceived: true, defaultValue: values[field.id] }
+            : field),
+          collectionStatus: 'Completed',
+          reportStatus: 'Completed',
+        }
+        : currentModule));
       setSavedSections(prev => ({ ...prev, [module.id]: true }));
+      setEditingSections(prev => ({ ...prev, [module.id]: false }));
       setWorkflow(prev => ({
         ...prev,
         [module.id]: {
           ...prev[module.id],
-          collection_status: prev[module.id]?.collection_status === 'Pending' ? 'Completed' : prev[module.id]?.collection_status,
+          collection_status: 'Completed',
+          report_status: 'Completed',
         },
       }));
+      setResultSuccessMsg(typeof response?.message === 'string' ? response.message : 'Results stored successfully');
     } catch (err) {
       console.error(err);
       setValidationError(`Could not save ${module.title}.`);
     } finally {
       setSavingSections(prev => ({ ...prev, [module.id]: false }));
-    }
-  };
-
-  const handleFinalizeSubmission = async () => {
-    setValidationError('');
-
-    for (const module of modules) {
-      const values = valuesForModule(formData, module.id);
-      const missingField = module.fields.find(field => field.required && !values[field.id]);
-      if (missingField) {
-        setValidationError(`${module.title}: ${missingField.label} is required.`);
-        setActiveModuleId(module.id);
-        setOpenGroups(prev => ({ ...prev, [module.id]: true }));
-        return;
-      }
-      if (!savedSections[module.id]) {
-        setValidationError(`Save ${module.title} before final submission.`);
-        setActiveModuleId(module.id);
-        return;
-      }
-    }
-
-    setIsSubmitting(true);
-    try {
-      await new Promise(resolve => window.setTimeout(resolve, 700));
-      setSubmitSuccess(true);
-      window.setTimeout(() => navigate('/'), 1400);
-    } catch {
-      setValidationError('Final submission failed.');
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -505,6 +562,7 @@ export default function AppointmentDetailPage() {
             activeClinicalStatus={activeClinicalStatus}
             providersForActive={providersForActive}
             saved={!!savedSections[activeModule.id]}
+            editing={!!editingSections[activeModule.id]}
             saving={!!savingSections[activeModule.id]}
             openGroups={openGroups}
             draggingModule={draggingModule}
@@ -515,6 +573,7 @@ export default function AppointmentDetailPage() {
             onSetDraggingModule={setDraggingModule}
             onAddFiles={addFiles}
             onRemoveUpload={removeUpload}
+            onEdit={() => setEditingSections(prev => ({ ...prev, [activeModule.id]: true }))}
             onSave={() => saveModule(activeModule)}
           />
 
@@ -531,6 +590,13 @@ export default function AppointmentDetailPage() {
               Submitted
             </div>
           )}
+
+          {resultSuccessMsg && (
+            <div className="rounded-lg border border-green-m bg-green-lt p-4 text-sm font-semibold text-green">
+              <CheckCircle2 className="mr-2 inline" size={18} />
+              {resultSuccessMsg}
+            </div>
+          )}
         </section>
       </div>
 
@@ -545,6 +611,13 @@ export default function AppointmentDetailPage() {
         <div className="mt-4 rounded-lg border border-green-m bg-green-lt p-4 text-sm font-semibold text-green lg:hidden">
           <CheckCircle2 className="mr-2 inline" size={18} />
           Submitted
+        </div>
+      )}
+
+      {resultSuccessMsg && (
+        <div className="mt-4 rounded-lg border border-green-m bg-green-lt p-4 text-sm font-semibold text-green lg:hidden">
+          <CheckCircle2 className="mr-2 inline" size={18} />
+          {resultSuccessMsg}
         </div>
       )}
 
@@ -569,6 +642,7 @@ export default function AppointmentDetailPage() {
                 activeClinicalStatus={activeClinicalStatus}
                 providersForActive={providersForActive}
                 saved={!!savedSections[activeModule.id]}
+                editing={!!editingSections[activeModule.id]}
                 saving={!!savingSections[activeModule.id]}
                 openGroups={openGroups}
                 draggingModule={draggingModule}
@@ -580,9 +654,10 @@ export default function AppointmentDetailPage() {
                 onSetDraggingModule={setDraggingModule}
                 onAddFiles={addFiles}
                 onRemoveUpload={removeUpload}
+                onEdit={() => setEditingSections(prev => ({ ...prev, [activeModule.id]: true }))}
                 onSave={async () => {
                   await saveModule(activeModule);
-                  setMobileWorkspaceOpen(false);
+                  if (savedSections[activeModule.id]) setMobileWorkspaceOpen(false);
                 }}
               />
             </div>
@@ -626,18 +701,6 @@ export default function AppointmentDetailPage() {
         </div>
       )}
 
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-n-200 bg-white p-4 md:left-auto md:rounded-tl-xl md:border-l md:px-5">
-        <div className="mx-auto flex max-w-6xl justify-end">
-          <button
-            type="button"
-            className={`btn btn-primary btn-lg w-full md:w-auto ${isSubmitting ? 'btn-loading' : ''}`}
-            onClick={handleFinalizeSubmission}
-            disabled={isSubmitting || submitSuccess}
-          >
-            Finalize Submission
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -650,6 +713,7 @@ function ModuleWorkspace({
   activeClinicalStatus,
   providersForActive,
   saved,
+  editing,
   saving,
   openGroups,
   draggingModule,
@@ -661,6 +725,7 @@ function ModuleWorkspace({
   onSetDraggingModule,
   onAddFiles,
   onRemoveUpload,
+  onEdit,
   onSave,
 }: {
   activeModule: MedicalModuleSchema;
@@ -670,6 +735,7 @@ function ModuleWorkspace({
   activeClinicalStatus: ClinicalStatus;
   providersForActive: HealthProvider[];
   saved: boolean;
+  editing: boolean;
   saving: boolean;
   openGroups: Record<string, boolean>;
   draggingModule: string | null;
@@ -681,6 +747,7 @@ function ModuleWorkspace({
   onSetDraggingModule: (moduleId: string | null) => void;
   onAddFiles: (moduleId: string, files: FileList | File[]) => void;
   onRemoveUpload: (moduleId: string, uploadId: string) => void;
+  onEdit: () => void;
   onSave: () => void | Promise<void>;
 }) {
   if (!activeWorkflow) return null;
@@ -699,6 +766,8 @@ function ModuleWorkspace({
     : activeWorkflow.provider_id
       ? [{ id: activeWorkflow.provider_id, name: activeWorkflow.provider_id, category: activeModule.providerCategory, status: 'available' as const }]
       : [];
+  const reviewingSaved = saved && !editing;
+  const savedResults = activeModule.fields.filter(field => field.resultReceived || hasEnteredValue(activeValues[field.id]));
 
   return (
     <div className={compact ? 'bg-white' : 'ds-card p-0'}>
@@ -725,42 +794,66 @@ function ModuleWorkspace({
       )}
 
       <div className={`space-y-5 ${compact ? 'p-4 pb-24' : 'p-4 md:p-5'}`}>
-        <div className="grid gap-3 sm:grid-cols-3 md:gap-4">
-          <div className="ds-field">
-            <label className="ds-label">Provider</label>
-            <select
-              className="ds-input"
-              value={activeWorkflow.provider_id}
-              onChange={(event) => onUpdateWorkflow(activeModule.id, { provider_id: event.target.value })}
-            >
-              {providerOptions.map(provider => (
-                <option key={provider.id} value={provider.id}>{provider.name}</option>
-              ))}
-            </select>
+        {!reviewingSaved && (
+          <div className="grid gap-3 sm:grid-cols-3 md:gap-4">
+            <div className="ds-field">
+              <label className="ds-label">Provider</label>
+              <select
+                className="ds-input"
+                value={activeWorkflow.provider_id}
+                onChange={(event) => onUpdateWorkflow(activeModule.id, { provider_id: event.target.value })}
+              >
+                {providerOptions.map(provider => (
+                  <option key={provider.id} value={provider.id}>{provider.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="ds-field">
+              <label className="ds-label">Collection Status</label>
+              <select
+                className="ds-input"
+                value={activeWorkflow.collection_status}
+                onChange={(event) => onUpdateWorkflow(activeModule.id, { collection_status: event.target.value as SampleCollectionStatus })}
+              >
+                {collectionStatusOptions.map(status => <option key={status} value={status}>{status}</option>)}
+              </select>
+            </div>
+            <div className="ds-field">
+              <label className="ds-label">Report Status</label>
+              <select
+                className="ds-input"
+                value={activeWorkflow.report_status}
+                onChange={(event) => onUpdateWorkflow(activeModule.id, { report_status: event.target.value as ReportStatus })}
+              >
+                {reportStatusOptions.map(status => <option key={status} value={status}>{status}</option>)}
+              </select>
+            </div>
           </div>
-          <div className="ds-field">
-            <label className="ds-label">Collection Status</label>
-            <select
-              className="ds-input"
-              value={activeWorkflow.collection_status}
-              onChange={(event) => onUpdateWorkflow(activeModule.id, { collection_status: event.target.value as SampleCollectionStatus })}
-            >
-              {collectionStatusOptions.map(status => <option key={status} value={status}>{status}</option>)}
-            </select>
-          </div>
-          <div className="ds-field">
-            <label className="ds-label">Report Status</label>
-            <select
-              className="ds-input"
-              value={activeWorkflow.report_status}
-              onChange={(event) => onUpdateWorkflow(activeModule.id, { report_status: event.target.value as ReportStatus })}
-            >
-              {reportStatusOptions.map(status => <option key={status} value={status}>{status}</option>)}
-            </select>
-          </div>
-        </div>
+        )}
 
-        <div className={`grid gap-4 ${compact ? '' : 'xl:grid-cols-[1fr_300px]'}`}>
+        {reviewingSaved ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {savedResults.map(field => (
+                <div key={field.id} className="rounded-lg border border-n-200 bg-n-50 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-n-900">{field.label}</div>
+                      <div className="mt-1 font-mono text-base font-bold text-n-900">{activeValues[field.id] || '-'}</div>
+                    </div>
+                    <span className="badge badge-ok shrink-0 text-[11px]">Completed</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="badge badge-ok">Saved</span>
+              <span className="badge badge-neutral">{moduleCategoryLabel(activeModule)}</span>
+              {activeWorkflow.provider_id && <span className="badge badge-neutral">{activeWorkflow.provider_id}</span>}
+            </div>
+          </div>
+        ) : (
+          <div className={`grid gap-4 ${compact ? '' : 'xl:grid-cols-[1fr_300px]'}`}>
           <div className="space-y-3 md:space-y-4">
             {Object.entries(activeGroups).map(([groupName, fields]) => {
               const groupKey = `${activeModule.id}:${groupName}`;
@@ -853,18 +946,23 @@ function ModuleWorkspace({
               </div>
             )}
           </div>
-        </div>
+          </div>
+        )}
 
         <div className={`${compact ? 'fixed inset-x-0 bottom-0 z-[75] border-t border-n-200 bg-white p-4' : 'sticky bottom-20 z-20 -mx-4 border-t border-n-100 bg-white/95 px-4 py-4 backdrop-blur md:static md:mx-0 md:flex md:justify-end md:border-t'}`}>
           <button
             type="button"
             className={`btn ${saved ? 'btn-secondary border-brand-m text-brand' : 'btn-primary'} btn-lg w-full md:w-auto ${saving ? 'btn-loading' : ''}`}
-            onClick={() => void onSave()}
+            onClick={() => reviewingSaved ? onEdit() : void onSave()}
             disabled={saving}
           >
-            {saved ? (
+            {saving ? (
+              'Saving...'
+            ) : reviewingSaved ? (
+              'Update'
+            ) : saved ? (
               <>
-                <Check size={18} /> Saved
+                <Save size={18} /> Update {activeModule.title}
               </>
             ) : (
               <>
@@ -898,6 +996,9 @@ function MedicalFieldControl({
     <div className={isWide ? 'sm:col-span-2' : ''}>
       <label className="ds-label">
         {field.label} {field.required && <span className="text-rose">*</span>}
+        <span className={`ml-2 badge ${field.resultReceived ? 'badge-ok' : 'badge-neutral'} text-[10px]`}>
+          {field.resultReceived ? 'Completed' : 'Pending'}
+        </span>
       </label>
 
       {field.type === 'select' && (
