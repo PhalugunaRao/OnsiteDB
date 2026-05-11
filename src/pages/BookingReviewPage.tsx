@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { api } from '../api/mock';
+import { api } from '../api';
 import type { User, Package } from '../types';
 import { CheckCircle2, AlertTriangle, CalendarPlus, User as UserIcon } from 'lucide-react';
 
@@ -20,7 +20,11 @@ export default function BookingReviewPage() {
 
   useEffect(() => {
     const init = async () => {
-      const res = await api.searchUser(userId || '');
+      if (!selectedCamp) {
+        setLoading(false);
+        return;
+      }
+      const res = await api.searchUser(selectedCamp.id, userId || '');
       if (res) {
         setUser(res.user);
         setPkg(res.package || null);
@@ -28,7 +32,7 @@ export default function BookingReviewPage() {
       setLoading(false);
     };
     init();
-  }, [userId]);
+  }, [selectedCamp, userId]);
 
   const handleCreateBooking = async () => {
     if (!user || !selectedCamp || !pkg) return;

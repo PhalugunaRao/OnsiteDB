@@ -3,8 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Building2, Calendar, Clock3, MapPin, Search, UsersRound } from 'lucide-react';
 
+import { api } from '../api';
 import { useStore } from '../store';
 import type { Camp } from '../types';
+
+const getCompanyInitials = (name?: string) => {
+  if (!name) return 'CO';
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  return `${words[0]?.[0] || ''}${words[1]?.[0] || words[0]?.[1] || ''}`.toUpperCase();
+};
+
+const getStatusBadgeClass = (status?: string) => {
+  const normalized = status?.toLowerCase();
+  if (normalized === 'inprogress' || normalized === 'active') return 'badge-info';
+  if (normalized === 'completed') return 'badge-ok';
+  if (normalized === 'pending' || normalized === 'upcoming') return 'badge-warn';
+  return 'badge-neutral';
+};
 
 function CampSkeleton() {
   return (
@@ -28,26 +43,48 @@ function CampSkeleton() {
 }
 
 export default function CampSelectionPage() {
-  const { activeCamps, setSelectedCamp } = useStore();
+  const { activeCamps, setActiveCamps, setSelectedCamp } = useStore();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setLoading(false), 250);
-    return () => window.clearTimeout(timer);
-  }, []);
+    let ignore = false;
+    const fetchCamps = async () => {
+      if (activeCamps.length > 0) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const camps = await api.getActiveCamps();
+        if (!ignore) setActiveCamps(camps);
+      } catch (error) {
+        console.error(error);
+        if (!ignore) setActiveCamps([]);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    };
+    void fetchCamps();
+    return () => {
+      ignore = true;
+    };
+  }, [activeCamps.length, setActiveCamps]);
 
   const filteredCamps = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return activeCamps;
     return activeCamps.filter(camp => [
+      camp.company_name,
       camp.name,
       camp.organization_name,
       camp.provider_name,
       camp.location,
       camp.address,
-      camp.timing
+      camp.timing,
+      camp.notes,
+      camp.status
     ].filter(Boolean).some(value => value!.toLowerCase().includes(normalizedQuery)));
   }, [activeCamps, query]);
 
@@ -104,21 +141,25 @@ export default function CampSelectionPage() {
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div className="flex min-w-0 gap-4">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-brand-m bg-brand-lt text-brand">
-                      <Building2 size={24} />
+                      {camp.company_logo ? (
+                        <img src={camp.company_logo} alt="" className="h-full w-full rounded-xl object-cover" />
+                      ) : (
+                        <span className="text-sm font-bold">{getCompanyInitials(camp.company_name || camp.name)}</span>
+                      )}
                     </div>
                     <div className="min-w-0">
-                      <h2 className="text-[18px] font-bold leading-snug text-n-900 transition-colors group-hover:text-brand">{camp.name}</h2>
-                      <p className="mt-1 text-[14px] font-semibold leading-5 text-n-700">{camp.organization_name || camp.provider_name}</p>
-                      <p className="mt-0.5 text-xs text-n-500">{camp.provider_name}</p>
+                      <h2 className="text-[18px] font-bold leading-snug text-n-900 transition-colors group-hover:text-brand">{camp.company_name || camp.name}</h2>
+                      <p className="mt-1 text-[14px] font-semibold leading-5 text-n-700">{camp.provider_name}</p>
+                      {camp.notes && <p className="mt-0.5 text-xs text-n-500">{camp.notes}</p>}
                     </div>
                   </div>
-                  <span className="badge badge-ok shrink-0">● Live</span>
+                  <span className={`badge ${getStatusBadgeClass(camp.status)} shrink-0 capitalize`}>● {camp.status}</span>
                 </div>
 
                 <div className="grid gap-3 text-[14px] leading-5 text-n-700 sm:grid-cols-2">
                   <div className="flex gap-2">
                     <MapPin size={17} className="mt-0.5 shrink-0 text-n-400" />
-                    <span>{camp.address || camp.location}</span>
+                    <span>{camp.provider_name}</span>
                   </div>
                   <div className="flex gap-2">
                     <Calendar size={17} className="mt-0.5 shrink-0 text-n-400" />
@@ -126,11 +167,11 @@ export default function CampSelectionPage() {
                   </div>
                   <div className="flex gap-2">
                     <Clock3 size={17} className="mt-0.5 shrink-0 text-n-400" />
-                    <span className="font-mono text-[13px]">{camp.timing || 'Camp timing pending'}</span>
+                    <span className="font-mono text-[13px]">{camp.status}</span>
                   </div>
                   <div className="flex gap-2">
                     <UsersRound size={17} className="mt-0.5 shrink-0 text-n-400" />
-                    <span><span className="font-mono font-semibold">{camp.assigned_agent_count || 0}</span> assigned agents</span>
+                    <span><span className="font-mono font-semibold">{camp.company_id || '-'}</span> company</span>
                   </div>
                 </div>
               </div>

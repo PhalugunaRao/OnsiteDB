@@ -1,5 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store';
+import { api } from '../api';
 import { LogOut, Activity, ArrowLeft, MapPinned, LayoutDashboard, Search, CalendarCheck, ListRestart, UserCircle } from 'lucide-react';
 
 export default function AppLayout() {
@@ -26,7 +27,12 @@ export default function AppLayout() {
     navigate(getBackTarget());
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch (error) {
+      console.error(error);
+    }
     logout();
     navigate('/login');
   };
@@ -75,8 +81,8 @@ export default function AppLayout() {
           
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex flex-col items-end">
-              <span className="text-[10px] font-semibold tracking-wider text-n-500 uppercase">{agent?.role}</span>
-              <span className="text-sm font-medium text-n-900 leading-tight">{agent?.name}</span>
+              <span className="text-[10px] font-semibold tracking-wider text-n-500 uppercase">{agent?.provider_name || agent?.role}</span>
+              <span className="text-sm font-medium text-n-900 leading-tight">{agent?.mobile_number || agent?.name}</span>
             </div>
             <button onClick={handleLogout} className="btn btn-icon btn-tertiary btn-sm" title="Logout" aria-label="Logout">
               <LogOut size={18} />

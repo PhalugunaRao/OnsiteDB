@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { api } from '../api/mock';
+import { api } from '../api';
+import { useStore } from '../store';
 import type { UserSearchResult } from '../types';
 import { Search as SearchIcon, User as UserIcon, Calendar } from 'lucide-react';
 
@@ -14,14 +15,15 @@ export default function SearchPage() {
   const [result, setResult] = useState<UserSearchResult | null>(null);
   const [error, setError] = useState('');
   const [inputValue, setInputValue] = useState(query);
+  const selectedCamp = useStore(state => state.selectedCamp);
 
-  const fetchResults = async (searchQuery: string) => {
-    if (!searchQuery) return;
+  const fetchResults = useCallback(async (searchQuery: string) => {
+    if (!searchQuery || !selectedCamp) return;
     try {
       setLoading(true);
       setError('');
       setResult(null);
-      const res = await api.searchUser(searchQuery);
+      const res = await api.searchUser(selectedCamp.id, searchQuery);
       if (res) {
         setResult(res);
       } else {
@@ -32,13 +34,13 @@ export default function SearchPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCamp]);
 
   useEffect(() => {
     if (query) {
       void Promise.resolve().then(() => fetchResults(query));
     }
-  }, [query]);
+  }, [fetchResults, query]);
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();

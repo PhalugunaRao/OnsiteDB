@@ -1,4 +1,6 @@
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from './store';
 import AppLayout from './layouts/AppLayout';
 import AuthLayout from './layouts/AuthLayout';
@@ -13,7 +15,8 @@ import FailureQueuePage from './pages/FailureQueuePage';
 
 function ProtectedRoute() {
   const agent = useStore(state => state.agent);
-  if (!agent) return <Navigate to="/login" replace />;
+  const xAgentKey = useStore(state => state.xAgentKey);
+  if (!agent || !xAgentKey) return <Navigate to="/login" replace />;
   return <Outlet />;
 }
 
@@ -24,6 +27,18 @@ function CampRoute() {
 }
 
 function App() {
+  const navigate = useNavigate();
+  const logout = useStore(state => state.logout);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      logout();
+      navigate('/login', { replace: true });
+    };
+    window.addEventListener('onsite:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('onsite:unauthorized', handleUnauthorized);
+  }, [logout, navigate]);
+
   return (
     <Routes>
       <Route element={<AuthLayout />}>

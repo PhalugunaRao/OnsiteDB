@@ -16,29 +16,19 @@ import {
   X,
 } from 'lucide-react';
 
-import { api } from '../api/mock';
-import { medicalModules } from '../data/medicalModules';
-import type { ClinicalStatus, MedicalField, MedicalModuleSchema } from '../data/medicalModules';
+import { api, type AppointmentDetails } from '../api';
+import { useStore } from '../store';
 import type {
-  Appointment,
-  ComponentEntry,
+  ClinicalStatus,
   HealthProvider,
-  Package,
+  MedicalField,
+  MedicalModuleSchema,
   ProviderCategory,
   ReportStatus,
   SampleCollectionStatus,
   TestWorkflowState,
   UploadedReport,
-  User,
 } from '../types';
-
-type AppointmentDetails = {
-  appointment: Appointment;
-  user: User;
-  package?: Package;
-  packages?: Package[];
-  entries: ComponentEntry[];
-};
 
 type ModuleValues = Record<string, Record<string, string>>;
 
@@ -62,6 +52,8 @@ const categoryLabels: Record<ProviderCategory, string> = {
   instant: 'Instant',
 };
 
+const moduleCategoryLabel = (module: MedicalModuleSchema) => module.category || categoryLabels[module.providerCategory] || module.providerCategory;
+
 const workflowBadgeClass: Record<SampleCollectionStatus, string> = {
   Pending: 'badge-neutral',
   'Sample Collected': 'badge-info',
@@ -81,7 +73,9 @@ const clinicalStatusClass: Record<ClinicalStatus, string> = {
 };
 
 const calculateAge = (dob: string) => {
-  const diff = Date.now() - new Date(dob).getTime();
+  const dobTime = new Date(dob).getTime();
+  if (!Number.isFinite(dobTime)) return '-';
+  const diff = Date.now() - dobTime;
   const ageDate = new Date(diff);
   return Math.abs(ageDate.getUTCFullYear() - 1970);
 };
@@ -118,25 +112,25 @@ const getModuleProgress = (module: MedicalModuleSchema, values: Record<string, s
   };
 };
 
-const createInitialFormData = () => {
-  return Object.fromEntries(medicalModules.map(module => [
+const createInitialFormData = (modules: MedicalModuleSchema[]) => {
+  return Object.fromEntries(modules.map(module => [
     module.id,
     { clinical_status: module.defaultStatus },
   ]));
 };
 
-const createInitialOpenState = () => {
-  return Object.fromEntries(medicalModules.map((module, index) => [module.id, index === 0]));
+const createInitialOpenState = (modules: MedicalModuleSchema[]) => {
+  return Object.fromEntries(modules.map((module, index) => [module.id, index === 0]));
 };
 
-const createInitialWorkflow = () => {
-  return Object.fromEntries(medicalModules.map(module => [
+const createInitialWorkflow = (modules: MedicalModuleSchema[], providers: HealthProvider[], details?: AppointmentDetails | null) => {
+  return Object.fromEntries(modules.map(module => [
     module.id,
     {
-      provider_id: api.getDefaultProviderForCategory(module.providerCategory),
-      collection_status: 'Pending' as SampleCollectionStatus,
-      report_status: 'Pending' as ReportStatus,
-      uploads: [],
+      provider_id: module.providerId || providers.find(provider => provider.category === module.providerCategory || provider.category === 'instant')?.id || '',
+      collection_status: module.collectionStatus || 'Pending' as SampleCollectionStatus,
+      report_status: module.reportStatus || 'Pending' as ReportStatus,
+      uploads: details?.entries.find(entry => entry.id === module.sampleCollectionId || entry.section_name === module.title)?.values.uploads as UploadedReport[] || [],
     },
   ]));
 };
@@ -144,18 +138,20 @@ const createInitialWorkflow = () => {
 export default function AppointmentDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const selectedCamp = useStore(state => state.selectedCamp);
   const [details, setDetails] = useState<AppointmentDetails | null>(null);
   const [providers, setProviders] = useState<HealthProvider[]>([]);
+  const [modules, setModules] = useState<MedicalModuleSchema[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingSections, setSavingSections] = useState<Record<string, boolean>>({});
   const [savedSections, setSavedSections] = useState<Record<string, boolean>>({});
-  const [formData, setFormData] = useState<ModuleValues>(createInitialFormData);
-  const [workflow, setWorkflow] = useState<Record<string, TestWorkflowState>>(createInitialWorkflow);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(createInitialOpenState);
+  const [formData, setFormData] = useState<ModuleValues>({});
+  const [workflow, setWorkflow] = useState<Record<string, TestWorkflowState>>({});
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [validationError, setValidationError] = useState('');
-  const [activeModuleId, setActiveModuleId] = useState(medicalModules[0].id);
+  const [activeModuleId, setActiveModuleId] = useState('');
   const [mobileWorkspaceOpen, setMobileWorkspaceOpen] = useState(false);
   const [packageListOpen, setPackageListOpen] = useState(false);
   const [draggingModule, setDraggingModule] = useState<string | null>(null);
@@ -164,14 +160,11 @@ export default function AppointmentDetailPage() {
     let ignore = false;
 
     const fetchDetails = async () => {
-      if (!id) return;
+      if (!id || !selectedCamp) return;
       setLoading(true);
       setDetails(null);
       try {
-        const [data, providerData] = await Promise.all([
-          api.getAppointmentDetails(id),
-          api.getHealthProviders(),
-        ]);
+        const data = await api.getAppointmentDetails(selectedCamp.id, id);
         if (ignore) return;
         if (!data.user) throw new Error('User not found');
         setDetails({
@@ -180,13 +173,16 @@ export default function AppointmentDetailPage() {
           package: data.package,
           packages: data.packages,
           entries: data.entries,
+          modules: data.modules,
+          providers: data.providers,
         });
-        setProviders(providerData);
-        setFormData(createInitialFormData());
-        setWorkflow(createInitialWorkflow());
-        setOpenGroups(createInitialOpenState());
+        setModules(data.modules);
+        setProviders(data.providers);
+        setFormData(createInitialFormData(data.modules));
+        setWorkflow(createInitialWorkflow(data.modules, data.providers, data));
+        setOpenGroups(createInitialOpenState(data.modules));
         setSavedSections({});
-        setActiveModuleId(medicalModules[0].id);
+        setActiveModuleId(data.modules[0]?.id || '');
         setPackageListOpen(false);
       } catch (err) {
         console.error(err);
@@ -199,16 +195,16 @@ export default function AppointmentDetailPage() {
     return () => {
       ignore = true;
     };
-  }, [id]);
+  }, [id, selectedCamp]);
 
-  const activeModule = medicalModules.find(module => module.id === activeModuleId) || medicalModules[0];
-  const activeValues = valuesForModule(formData, activeModule.id);
-  const activeWorkflow = workflow[activeModule.id];
-  const activeGroups = useMemo(() => groupedFields(activeModule.fields), [activeModule]);
-  const providersForActive = providers.filter(provider => provider.category === activeModule.providerCategory || provider.category === 'instant');
+  const activeModule = modules.find(module => module.id === activeModuleId) || modules[0];
+  const activeValues = activeModule ? valuesForModule(formData, activeModule.id) : {};
+  const activeWorkflow = activeModule ? workflow[activeModule.id] : undefined;
+  const activeGroups = useMemo(() => activeModule ? groupedFields(activeModule.fields) : {}, [activeModule]);
+  const providersForActive = activeModule ? providers.filter(provider => provider.category === activeModule.providerCategory || provider.category === 'instant') : [];
 
   const overallProgress = useMemo(() => {
-    const totals = medicalModules.reduce((acc, module) => {
+    const totals = modules.reduce((acc, module) => {
       const progress = getModuleProgress(module, valuesForModule(formData, module.id));
       return {
         completed: acc.completed + progress.completedRequired,
@@ -216,7 +212,7 @@ export default function AppointmentDetailPage() {
       };
     }, { completed: 0, total: 0 });
     return totals;
-  }, [formData]);
+  }, [formData, modules]);
 
   const appointmentPackages = useMemo(() => {
     if (!details) return [];
@@ -251,6 +247,15 @@ export default function AppointmentDetailPage() {
       },
     }));
     setSavedSections(prev => ({ ...prev, [moduleId]: false }));
+    const module = modules.find(item => item.id === moduleId);
+    if (next.provider_id && details && module?.appointmentTestId) {
+      void api.updateAppointmentTestProvider(details.appointment.camp_id, details.appointment.id, module.appointmentTestId, {
+        provider_id: next.provider_id,
+      }).catch(error => {
+        console.error(error);
+        setValidationError(`Could not update ${module.title} provider.`);
+      });
+    }
   };
 
   const addFiles = (moduleId: string, files: FileList | File[]) => {
@@ -282,22 +287,19 @@ export default function AppointmentDetailPage() {
 
   const saveModule = async (module: MedicalModuleSchema) => {
     if (!details) return;
+    const moduleWorkflow = workflow[module.id];
     setSavingSections(prev => ({ ...prev, [module.id]: true }));
     setValidationError('');
     try {
-      await api.saveComponentEntry({
-        appointment_id: details.appointment.id,
-        user_id: details.user.id,
-        camp_id: details.appointment.camp_id,
-        package_component_id: module.id,
-        section_name: module.title,
-        values: {
-          schema_id: module.id,
-          fields: formData[module.id],
-          workflow: workflow[module.id],
+      await api.saveComponentEntry(details.appointment.camp_id, details.appointment.id, module.sampleCollectionId || module.id, {
+        result_values: formData[module.id],
+        remarks: formData[module.id]?.doctor_remarks || formData[module.id]?.remarks || '',
+        status: moduleWorkflow?.collection_status || 'Pending',
+        report_status: moduleWorkflow?.report_status || 'Pending',
+        provider_info: {
+          provider_id: moduleWorkflow?.provider_id,
         },
-        status: 'draft_saved',
-        saved_by: 'agent-1',
+        attachments: moduleWorkflow?.uploads || [],
       });
       setSavedSections(prev => ({ ...prev, [module.id]: true }));
       setWorkflow(prev => ({
@@ -318,7 +320,7 @@ export default function AppointmentDetailPage() {
   const handleFinalizeSubmission = async () => {
     setValidationError('');
 
-    for (const module of medicalModules) {
+    for (const module of modules) {
       const values = valuesForModule(formData, module.id);
       const missingField = module.fields.find(field => field.required && !values[field.id]);
       if (missingField) {
@@ -366,6 +368,17 @@ export default function AppointmentDetailPage() {
     );
   }
 
+  if (!activeModule) {
+    return (
+      <div className="empty-state ds-surface mx-auto max-w-xl">
+        <div className="empty-state-icon">
+          <ClipboardCheck size={28} />
+        </div>
+        <h2 className="empty-state-title">No medical modules</h2>
+      </div>
+    );
+  }
+
   const activeClinicalStatus = (activeValues.clinical_status || activeModule.defaultStatus) as ClinicalStatus;
   const visiblePackages = appointmentPackages.slice(0, 3);
   const hiddenPackageCount = Math.max(appointmentPackages.length - visiblePackages.length, 0);
@@ -383,14 +396,14 @@ export default function AppointmentDetailPage() {
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-n-600">
                 <span className="rounded bg-n-50 px-1.5 py-0.5 font-mono text-n-700">{details.user.employee_id}</span>
                 <span>{details.user.gender}</span>
-                <span><span className="font-mono">{calculateAge(details.user.dob)}</span> yrs</span>
+                <span><span className="font-mono">{details.user.age_label || calculateAge(details.user.dob)}</span>{details.user.age_label ? '' : ' yrs'}</span>
                 <span className="font-mono">{details.user.mobile_number}</span>
               </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <span className="badge badge-info">Apt <span className="font-mono">{details.appointment.id}</span></span>
-            <span className="badge badge-neutral">{details.appointment.report_state}</span>
+            <span className="badge badge-info">Apt <span className="font-mono">{details.appointment.unique_id || details.appointment.id}</span></span>
+            <span className="badge badge-neutral">{details.appointment.vendor_status || details.appointment.report_state}</span>
           </div>
         </div>
 
@@ -446,7 +459,7 @@ export default function AppointmentDetailPage() {
               Medical Modules
             </div>
             <div className="divide-y divide-n-100">
-              {medicalModules.map(module => {
+              {modules.map(module => {
                 const values = valuesForModule(formData, module.id);
                 const progress = getModuleProgress(module, values);
                 const moduleWorkflow = workflow[module.id];
@@ -470,7 +483,7 @@ export default function AppointmentDetailPage() {
                         <h3 className="font-semibold text-n-900">{module.title}</h3>
                         <ChevronRight size={16} className={`mt-0.5 text-n-400 transition-transform ${isActive ? 'rotate-90 text-brand' : ''}`} />
                       </div>
-                      <p className="mt-1 truncate text-xs text-n-500">{categoryLabels[module.providerCategory]} · {getProviderName(providers, moduleWorkflow?.provider_id)}</p>
+                      <p className="mt-1 truncate text-xs text-n-500">{moduleCategoryLabel(module)} · {module.providerName || getProviderName(providers, moduleWorkflow?.provider_id)}</p>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         <span className="badge badge-neutral text-[11px]"><span className="font-mono">{progress.completedRequired}/{progress.requiredTotal}</span></span>
                         <span className={`badge ${clinicalStatusClass[clinicalStatus]} text-[11px]`}>{clinicalStatus}</span>
@@ -540,7 +553,7 @@ export default function AppointmentDetailPage() {
           <div className="absolute inset-x-0 bottom-0 flex max-h-[94dvh] flex-col rounded-t-[22px] bg-white shadow-xl">
             <div className="flex items-center justify-between gap-3 border-b border-n-100 px-4 py-3">
               <div className="min-w-0">
-                <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand">{categoryLabels[activeModule.providerCategory]}</div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand">{moduleCategoryLabel(activeModule)}</div>
                 <h2 className="truncate text-lg font-bold text-n-900">{activeModule.title}</h2>
               </div>
               <button type="button" className="btn btn-icon btn-secondary" aria-label="Close module" onClick={() => setMobileWorkspaceOpen(false)}>
@@ -671,6 +684,21 @@ function ModuleWorkspace({
   onSave: () => void | Promise<void>;
 }) {
   if (!activeWorkflow) return null;
+  const collectionStatusOptions = activeModule.collectionStatusOptions?.length
+    ? activeModule.collectionStatusOptions
+    : activeWorkflow.collection_status
+      ? [activeWorkflow.collection_status]
+      : collectionStatuses;
+  const reportStatusOptions = activeModule.reportStatusOptions?.length
+    ? activeModule.reportStatusOptions
+    : activeWorkflow.report_status
+      ? [activeWorkflow.report_status]
+      : reportStatuses;
+  const providerOptions = providersForActive.length
+    ? providersForActive
+    : activeWorkflow.provider_id
+      ? [{ id: activeWorkflow.provider_id, name: activeWorkflow.provider_id, category: activeModule.providerCategory, status: 'available' as const }]
+      : [];
 
   return (
     <div className={compact ? 'bg-white' : 'ds-card p-0'}>
@@ -678,7 +706,7 @@ function ModuleWorkspace({
         <div className="border-b border-n-100 bg-n-50 px-4 py-4 md:px-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="text-xs font-bold uppercase tracking-[0.12em] text-brand">{categoryLabels[activeModule.providerCategory]}</div>
+              <div className="text-xs font-bold uppercase tracking-[0.12em] text-brand">{moduleCategoryLabel(activeModule)}</div>
               <h2 className="mt-1 text-xl font-bold text-n-900">{activeModule.title}</h2>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -705,7 +733,7 @@ function ModuleWorkspace({
               value={activeWorkflow.provider_id}
               onChange={(event) => onUpdateWorkflow(activeModule.id, { provider_id: event.target.value })}
             >
-              {providersForActive.map(provider => (
+              {providerOptions.map(provider => (
                 <option key={provider.id} value={provider.id}>{provider.name}</option>
               ))}
             </select>
@@ -717,7 +745,7 @@ function ModuleWorkspace({
               value={activeWorkflow.collection_status}
               onChange={(event) => onUpdateWorkflow(activeModule.id, { collection_status: event.target.value as SampleCollectionStatus })}
             >
-              {collectionStatuses.map(status => <option key={status} value={status}>{status}</option>)}
+              {collectionStatusOptions.map(status => <option key={status} value={status}>{status}</option>)}
             </select>
           </div>
           <div className="ds-field">
@@ -727,7 +755,7 @@ function ModuleWorkspace({
               value={activeWorkflow.report_status}
               onChange={(event) => onUpdateWorkflow(activeModule.id, { report_status: event.target.value as ReportStatus })}
             >
-              {reportStatuses.map(status => <option key={status} value={status}>{status}</option>)}
+              {reportStatusOptions.map(status => <option key={status} value={status}>{status}</option>)}
             </select>
           </div>
         </div>

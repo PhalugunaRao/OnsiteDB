@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { CalendarDays, ClipboardList, Eye, Mail, Phone, Search, UserRoundCheck } from 'lucide-react';
 
-import { api } from '../api/mock';
+import { api, type CampDashboardData } from '../api';
 import { useStore } from '../store';
 import type { Appointment, User } from '../types';
 
@@ -33,6 +33,14 @@ function avatarInk(value?: string) {
   const index = source.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) % avatarInkPalette.length;
   return avatarInkPalette[index];
 }
+
+const getStatusBadgeClass = (status?: string) => {
+  const normalized = status?.toLowerCase();
+  if (normalized === 'inprogress' || normalized === 'active') return 'badge-info';
+  if (normalized === 'completed') return 'badge-ok';
+  if (normalized === 'pending' || normalized === 'upcoming') return 'badge-warn';
+  return 'badge-neutral';
+};
 
 function Highlight({ value, query }: { value?: string; query: string }) {
   if (!value) return <span>-</span>;
@@ -83,6 +91,25 @@ export default function DashboardPage() {
   const searchQuery = searchParams.get('q') || '';
   const [searchResults, setSearchResults] = useState<AppointmentResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [dashboardData, setDashboardData] = useState<CampDashboardData | null>(null);
+
+  useEffect(() => {
+    if (!selectedCamp) return;
+    let ignore = false;
+    const fetchDashboard = async () => {
+      try {
+        const data = await api.getCampDashboard(selectedCamp.id);
+        if (!ignore) setDashboardData(data);
+      } catch (error) {
+        console.error('Dashboard failed:', error);
+        if (!ignore) setDashboardData(null);
+      }
+    };
+    void fetchDashboard();
+    return () => {
+      ignore = true;
+    };
+  }, [selectedCamp]);
 
   useEffect(() => {
     let ignore = false;
@@ -95,7 +122,8 @@ export default function DashboardPage() {
       }
       setIsSearching(true);
       try {
-        const results = await api.searchAppointments(searchQuery);
+        if (!selectedCamp) return;
+        const results = await api.searchAppointments(selectedCamp.id, searchQuery);
         if (!ignore) setSearchResults(results);
       } catch (err) {
         console.error('Search failed:', err);
@@ -105,12 +133,12 @@ export default function DashboardPage() {
       }
     };
 
-    const debounceTimer = window.setTimeout(fetchResults, 250);
+    const debounceTimer = window.setTimeout(fetchResults, 350);
     return () => {
       ignore = true;
       window.clearTimeout(debounceTimer);
     };
-  }, [searchQuery]);
+  }, [searchQuery, selectedCamp]);
 
   const resultCount = searchResults.length;
   const searched = searchQuery.trim().length > 0;
@@ -136,6 +164,8 @@ export default function DashboardPage() {
   };
 
   if (!selectedCamp) return null;
+  const dashboardCamp = dashboardData?.camp || selectedCamp;
+  const stats = dashboardData?.stats;
 
   return (
     <div className="space-y-5">
@@ -146,13 +176,16 @@ export default function DashboardPage() {
               <ClipboardList size={26} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold leading-tight text-n-900">{selectedCamp.name}</h1>
-              <p className="mt-1 text-sm text-n-600">{selectedCamp.provider_name} · {selectedCamp.location}</p>
+              <h1 className="text-2xl font-bold leading-tight text-n-900">{dashboardCamp.company_name || dashboardCamp.name}</h1>
+              <p className="mt-1 text-sm text-n-600">{dashboardCamp.provider_name} · {dashboardCamp.notes || dashboardCamp.status}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <span className="badge badge-ok">● Active Now</span>
-            <span className="badge badge-neutral"><span className="font-mono">{selectedCamp.assigned_agent_count || 0}</span> Agents</span>
+            <span className={`badge ${getStatusBadgeClass(dashboardCamp.status)} capitalize`}>● {dashboardCamp.status}</span>
+            <span className="badge badge-neutral"><span className="font-mono">{stats?.total_appointments ?? 0}</span> Appointments</span>
+            <span className="badge badge-ok"><span className="font-mono">{stats?.completed ?? 0}</span> Completed</span>
+            <span className="badge badge-info"><span className="font-mono">{stats?.confirmed ?? 0}</span> Confirmed</span>
+            <span className="badge badge-warn"><span className="font-mono">{stats?.in_progress ?? 0}</span> In Progress</span>
           </div>
         </div>
       </div>
@@ -229,12 +262,12 @@ export default function DashboardPage() {
                               <div className="font-semibold text-n-900">
                                 <Highlight value={apt.user?.full_name} query={searchQuery} />
                               </div>
-                              <div className="mt-0.5 text-xs text-n-500">{apt.user?.company}</div>
+                              <div className="mt-0.5 text-xs text-n-500">{apt.package_name || apt.provider_name}</div>
                             </div>
                           </div>
                         </td>
                         <td className="font-mono font-semibold text-n-800">
-                          <Highlight value={apt.id} query={searchQuery} />
+                          <Highlight value={apt.unique_id || apt.id} query={searchQuery} />
                         </td>
                         <td>
                           <div className="space-y-1">
@@ -251,7 +284,7 @@ export default function DashboardPage() {
                         <td className="whitespace-nowrap font-mono text-xs">{format(new Date(apt.created_at), 'MMM d, yyyy')}</td>
                         <td>
                           <span className={`badge ${apt.booking_status === 'success' ? 'badge-ok' : apt.booking_status === 'pending' ? 'badge-warn' : 'badge-risk'} capitalize`}>
-                            {apt.booking_status}
+                            {apt.vendor_status || apt.booking_status}
                           </span>
                         </td>
                         <td className="text-right">
@@ -285,12 +318,12 @@ export default function DashboardPage() {
                           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-n-500">
                             <span className="font-mono"><Highlight value={apt.user?.employee_id} query={searchQuery} /></span>
                             <span className="text-n-300">|</span>
-                            <span className="font-mono"><Highlight value={apt.id} query={searchQuery} /></span>
+                            <span className="font-mono"><Highlight value={apt.unique_id || apt.id} query={searchQuery} /></span>
                           </div>
                         </div>
                       </div>
                       <span className={`badge ${apt.booking_status === 'success' ? 'badge-ok' : apt.booking_status === 'pending' ? 'badge-warn' : 'badge-risk'} shrink-0 capitalize`}>
-                        {apt.booking_status}
+                        {apt.vendor_status || apt.booking_status}
                       </span>
                     </div>
 

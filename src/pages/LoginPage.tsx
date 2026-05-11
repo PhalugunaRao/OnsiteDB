@@ -3,7 +3,7 @@ import type { ClipboardEvent, FormEvent, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, ArrowLeft, CheckCircle2, Phone, RotateCcw, ShieldCheck } from 'lucide-react';
 
-import { api } from '../api/mock';
+import { api } from '../api';
 import { useStore } from '../store';
 
 const countries = [
@@ -93,7 +93,7 @@ export default function LoginPage() {
       const res = await api.verifyOtp(verifiedMobile, otp);
       setAuthSuccess(true);
       window.setTimeout(() => {
-        setAgent(res.agent!);
+        setAgent(res.agent, res.xAgentKey);
         setActiveCamps(res.activeCamps);
         navigate('/select-camp');
       }, 350);

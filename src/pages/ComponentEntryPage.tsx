@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { api } from '../api/mock';
+import { api } from '../api';
 import type { Package, PackageComponent, User } from '../types';
 import { CheckCircle2, Circle, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
 
@@ -16,16 +16,20 @@ export default function ComponentEntryPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [pkg, setPkg] = useState<Package | null>(null);
+  const [appointmentId, setAppointmentId] = useState('');
   const [activeSection, setActiveSection] = useState<string | null>(null);
 
   useEffect(() => {
     const init = async () => {
-      // Need a way to fetch just user and package by ID. Reusing search mock for now.
-      // In a real app we'd have a specific endpoint.
-      const res = await api.searchUser(userId || '');
+      if (!selectedCamp) {
+        setLoading(false);
+        return;
+      }
+      const res = await api.searchUser(selectedCamp.id, userId || '');
       if (res) {
         setUser(res.user);
         setPkg(res.package || null);
+        setAppointmentId(res.appointment?.id || '');
         if (res.package && res.package.components.length > 0) {
           setActiveSection(res.package.components[0].section);
         }
@@ -33,7 +37,7 @@ export default function ComponentEntryPage() {
       setLoading(false);
     };
     init();
-  }, [userId]);
+  }, [selectedCamp, userId]);
 
   if (loading) return <div className="p-10 text-center text-sm font-medium text-n-500">Loading component data...</div>;
   if (!user || !pkg) return <div className="empty-state ds-surface mx-auto max-w-xl"><div className="empty-state-title">Error loading data</div><p className="empty-state-desc">This employee record is not available for the selected camp.</p></div>;
@@ -46,16 +50,15 @@ export default function ComponentEntryPage() {
   }, {} as Record<string, typeof pkg.components>);
 
   const handleSaveComponent = async (componentId: string, value: string) => {
-    if (!value) return;
-    const entry = await api.saveComponentEntry({
-      temporary_local_id: `temp-${componentId}`,
-      user_id: user.id,
-      camp_id: selectedCamp!.id,
-      package_component_id: componentId,
-      section_name: activeSection || '',
-      values: { value },
+    if (!value || !appointmentId) return;
+    const entry = await api.saveComponentEntry(selectedCamp!.id, appointmentId, componentId, {
+      result_values: { value },
+      remarks: '',
       status: 'draft_saved',
-      saved_by: agent!.id
+      provider_info: {
+        saved_by: agent!.id,
+      },
+      section_name: activeSection || '',
     });
     updateDraftEntry(componentId, entry);
   };

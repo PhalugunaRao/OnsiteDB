@@ -2,31 +2,39 @@ export interface Agent {
   id: string;
   name: string;
   mobile_number: string;
+  provider_id?: string;
+  provider_name?: string;
   role: string;
   is_active: boolean;
 }
 
 export interface Camp {
   id: string;
+  company_name?: string;
+  company_id?: string;
   name: string;
   organization_name?: string;
   provider_id: string;
   provider_name: string;
   provider_logo: string;
+  company_logo?: string | null;
   start_date: string; // ISO format
   end_date: string;
   timing?: string;
   assigned_agent_count?: number;
   location: string;
   address?: string;
-  status: 'active' | 'upcoming' | 'completed';
+  notes?: string;
+  status: 'active' | 'upcoming' | 'completed' | 'inprogress';
 }
 
 export interface User {
   id: string;
+  customer_id?: string;
   full_name: string;
   gender: 'Male' | 'Female' | 'Other';
   dob: string;
+  age_label?: string;
   employee_id: string;
   mobile_number: string;
   email: string;
@@ -35,16 +43,22 @@ export interface User {
 
 export interface Appointment {
   id: string;
+  unique_id?: string;
   user_id: string;
   camp_id: string;
   provider_id: string;
+  provider_name?: string;
   package_id: string;
+  package_name?: string;
   booking_status: 'success' | 'failure' | 'pending';
+  vendor_status?: string;
   appointment_state: 'booking_created' | 'sample_pending' | 'partial_completed' | 'processing';
   report_state: 'pending' | 'generated' | 'shared';
   created_by_agent_id: string;
   created_at: string;
   updated_at: string;
+  appointment_date?: string;
+  time?: string;
 }
 
 export interface PackageComponent {
@@ -57,6 +71,41 @@ export interface PackageComponent {
   input_mode?: 'sample' | 'instant' | 'attachment';
   provider_category?: ProviderCategory;
   required: boolean;
+}
+
+export type ClinicalStatus = 'Normal' | 'Attention Required' | 'Critical' | 'Pending Review' | 'Verified';
+
+export type MedicalFieldType = 'number' | 'text' | 'textarea' | 'select' | 'chips' | 'boolean';
+
+export interface MedicalField {
+  id: string;
+  label: string;
+  type: MedicalFieldType;
+  group: string;
+  required?: boolean;
+  unit?: string;
+  placeholder?: string;
+  options?: string[];
+  normalRange?: string;
+  statusSensitive?: boolean;
+}
+
+export interface MedicalModuleSchema {
+  id: string;
+  title: string;
+  providerCategory: ProviderCategory;
+  allowAttachments: boolean;
+  defaultStatus: ClinicalStatus;
+  fields: MedicalField[];
+  sampleCollectionId?: string;
+  appointmentTestId?: string;
+  providerId?: string;
+  collectionStatus?: SampleCollectionStatus;
+  reportStatus?: ReportStatus;
+  collectionStatusOptions?: SampleCollectionStatus[];
+  reportStatusOptions?: ReportStatus[];
+  providerName?: string;
+  category?: string;
 }
 
 export interface Package {
