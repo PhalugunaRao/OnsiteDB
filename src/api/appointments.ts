@@ -281,6 +281,28 @@ export const updateAppointmentTestProvider = async (
   }
 };
 
+export const attachProviderToAppointment = async (
+  campId: string,
+  appointmentId: string,
+  providerId: string | number
+) => {
+  try {
+    const response = await apiClient.put(
+      `/v3/onsite/camps/${campId}/appointments/${appointmentId}`,
+      { provider_id: providerId }
+    );
+    if (import.meta.env.DEV) {
+      console.group('ATTACH PROVIDER');
+      console.log('PROVIDER ID', providerId);
+      console.log('RESPONSE', response.data);
+      console.groupEnd();
+    }
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to attach provider'), { cause: error });
+  }
+};
+
 export const createBooking = async (request?: Record<string, unknown>): Promise<{ appointment_id: string }> => {
   void request;
   throw new Error('Booking API endpoint is not configured for this app.');

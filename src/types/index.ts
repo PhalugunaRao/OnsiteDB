@@ -44,6 +44,10 @@ export interface User {
 export interface Appointment {
   id: string;
   unique_id?: string;
+  provider?: {
+    id?: string;
+    name?: string;
+  };
   user_id: string;
   camp_id: string;
   provider_id: string;

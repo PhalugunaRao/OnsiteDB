@@ -168,13 +168,22 @@ export const normalizeUser = (value: unknown): User => {
 
 export const normalizeAppointment = (value: unknown, fallback: Partial<Appointment> = {}): Appointment => {
   const source = asRecord(value);
+  const provider = asRecord(source.provider);
+  const providerId = firstValue(source, ['provider_id'], fallback.provider_id || '');
+  const providerName = firstValue(source, ['provider_name'], fallback.provider_name || '');
+  const attachedProviderId = firstValue(provider, ['id'], fallback.provider?.id || '');
+  const attachedProviderName = firstValue(provider, ['name'], fallback.provider?.name || '');
   return {
     id: firstValue(source, ['id', 'appointment_id', 'booking_id'], fallback.id || ''),
     unique_id: firstValue(source, ['unique_id'], fallback.unique_id),
+    provider: {
+      id: attachedProviderId,
+      name: attachedProviderName,
+    },
     user_id: firstValue(source, ['user_id', 'member_id', 'employee_id'], fallback.user_id || ''),
     camp_id: firstValue(source, ['camp_id'], fallback.camp_id || ''),
-    provider_id: firstValue(source, ['provider_id'], fallback.provider_id || ''),
-    provider_name: firstValue(source, ['provider_name'], fallback.provider_name),
+    provider_id: providerId,
+    provider_name: providerName,
     package_id: firstValue(source, ['package_id', 'health_package_id'], fallback.package_id || ''),
     package_name: firstValue(source, ['package_name'], fallback.package_name),
     booking_status: normalizeBookingStatus(source.booking_status || source.vendor_status || source.status || fallback.booking_status),

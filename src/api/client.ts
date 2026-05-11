@@ -20,15 +20,8 @@ export const setStoredAuthTokens = (agentKey?: string) => {
 };
 
 export const clearStoredAuth = () => {
-  [
-    AGENT_KEY_STORAGE_KEY,
-    AGENT_STORAGE_KEY,
-    CAMPS_STORAGE_KEY,
-    SELECTED_CAMP_STORAGE_KEY,
-  ].forEach(key => {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
-  });
+  localStorage.clear();
+  sessionStorage.clear();
 };
 
 export const apiClient = axios.create({

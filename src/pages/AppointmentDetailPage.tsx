@@ -6,8 +6,10 @@ import {
   ChevronRight,
   ClipboardCheck,
   FileText,
+  Link2,
   Loader2,
   Paperclip,
+  Pencil,
   Save,
   Trash2,
   UploadCloud,
@@ -180,8 +182,14 @@ const toComponentId = (fieldId: string) => {
   return Number.isFinite(numericId) && String(numericId) === fieldId ? numericId : fieldId;
 };
 
+const toProviderId = (providerId: string) => {
+  const numericId = Number(providerId);
+  return Number.isFinite(numericId) && String(numericId) === providerId ? numericId : providerId;
+};
+
 export default function AppointmentDetailPage() {
   const { id } = useParams();
+  const agent = useStore(state => state.agent);
   const selectedCamp = useStore(state => state.selectedCamp);
   const [details, setDetails] = useState<AppointmentDetails | null>(null);
   const [providers, setProviders] = useState<HealthProvider[]>([]);
@@ -195,7 +203,10 @@ export default function AppointmentDetailPage() {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [submitSuccess] = useState(false);
   const [resultSuccessMsg, setResultSuccessMsg] = useState('');
+  const [providerAttachMsg, setProviderAttachMsg] = useState('');
   const [validationError, setValidationError] = useState('');
+  const [attachingProvider, setAttachingProvider] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [activeModuleId, setActiveModuleId] = useState('');
   const [mobileWorkspaceOpen, setMobileWorkspaceOpen] = useState(false);
   const [packageListOpen, setPackageListOpen] = useState(false);
@@ -241,7 +252,7 @@ export default function AppointmentDetailPage() {
     return () => {
       ignore = true;
     };
-  }, [id, selectedCamp]);
+  }, [id, refreshNonce, selectedCamp]);
 
   const activeModule = modules.find(module => module.id === activeModuleId) || modules[0];
   const activeValues = activeModule ? valuesForModule(formData, activeModule.id) : {};
@@ -264,6 +275,29 @@ export default function AppointmentDetailPage() {
     if (!details) return [];
     return details.packages?.length ? details.packages : details.package ? [details.package] : [];
   }, [details]);
+
+  const appointmentProviderName = details?.appointment.provider?.name || details?.appointment.provider_name || agent?.provider_name || '';
+  const isProviderAttached = !!details?.appointment.provider?.id;
+  const showAttachProvider = !!details && !details.appointment.provider?.id;
+  const canAttachProvider = !!details && !!agent?.provider_id;
+
+  const handleAttachProvider = async () => {
+    if (!details || !selectedCamp || !agent?.provider_id) return;
+    const wasProviderAttached = isProviderAttached;
+    setAttachingProvider(true);
+    setValidationError('');
+    setProviderAttachMsg('');
+    try {
+      await api.attachProviderToAppointment(selectedCamp.id, details.appointment.id, toProviderId(agent.provider_id));
+      setProviderAttachMsg(wasProviderAttached ? 'Provider updated successfully' : 'Provider attached successfully');
+      setRefreshNonce(value => value + 1);
+    } catch (error) {
+      console.error(error);
+      setValidationError(wasProviderAttached ? 'Could not update provider.' : 'Could not attach provider.');
+    } finally {
+      setAttachingProvider(false);
+    }
+  };
 
   const updateField = (moduleId: string, fieldId: string, value: string) => {
     setFormData(prev => ({
@@ -461,6 +495,12 @@ export default function AppointmentDetailPage() {
           <div className="flex flex-wrap gap-2">
             <span className="badge badge-info">Apt <span className="font-mono">{details.appointment.unique_id || details.appointment.id}</span></span>
             <span className="badge badge-neutral">{details.appointment.vendor_status || details.appointment.report_state}</span>
+            {isProviderAttached && (
+              <>
+                {appointmentProviderName && <span className="badge badge-neutral">{appointmentProviderName}</span>}
+                <span className="badge badge-ok">Attached</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -507,6 +547,38 @@ export default function AppointmentDetailPage() {
             style={{ width: `${overallProgress.total ? (overallProgress.completed / overallProgress.total) * 100 : 0}%` }}
           />
         </div>
+      </div>
+
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {showAttachProvider ? (
+          <button
+            type="button"
+            className="btn btn-brand btn-sm w-full px-4 font-semibold shadow-sm sm:w-auto"
+            onClick={handleAttachProvider}
+            disabled={attachingProvider || !canAttachProvider}
+            aria-busy={attachingProvider}
+          >
+            <Link2 size={15} />
+            {attachingProvider ? 'Attaching...' : 'Attach Provider'}
+          </button>
+        ) : isProviderAttached ? (
+          <div className="flex w-full flex-col gap-3 rounded-lg border border-n-200 bg-white px-3 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {appointmentProviderName && <span className="badge badge-neutral">{appointmentProviderName}</span>}
+              <span className="badge badge-ok">Provider Attached</span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-brand btn-sm w-full px-4 font-semibold shadow-sm sm:w-auto"
+              onClick={handleAttachProvider}
+              disabled={attachingProvider || !canAttachProvider}
+              aria-busy={attachingProvider}
+            >
+              <Pencil size={15} />
+              {attachingProvider ? 'Updating...' : 'Update Provider'}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
@@ -597,6 +669,13 @@ export default function AppointmentDetailPage() {
               {resultSuccessMsg}
             </div>
           )}
+
+          {providerAttachMsg && (
+            <div className="rounded-lg border border-green-m bg-green-lt p-4 text-sm font-semibold text-green">
+              <CheckCircle2 className="mr-2 inline" size={18} />
+              {providerAttachMsg}
+            </div>
+          )}
         </section>
       </div>
 
@@ -618,6 +697,13 @@ export default function AppointmentDetailPage() {
         <div className="mt-4 rounded-lg border border-green-m bg-green-lt p-4 text-sm font-semibold text-green lg:hidden">
           <CheckCircle2 className="mr-2 inline" size={18} />
           {resultSuccessMsg}
+        </div>
+      )}
+
+      {providerAttachMsg && (
+        <div className="mt-4 rounded-lg border border-green-m bg-green-lt p-4 text-sm font-semibold text-green lg:hidden">
+          <CheckCircle2 className="mr-2 inline" size={18} />
+          {providerAttachMsg}
         </div>
       )}
 

@@ -88,7 +88,11 @@ export const verifyOtp = async (mobile: string, otp: string): Promise<VerifyOtpR
 export const logout = async () => {
   try {
     const response = await apiClient.delete('/v3/onsite/logout');
-    if (import.meta.env.DEV) console.log('LOGOUT RESPONSE', response.data);
+    if (import.meta.env.DEV) {
+      console.group('LOGOUT');
+      console.log('RESPONSE', response.data);
+      console.groupEnd();
+    }
     return response.data;
   } catch (error) {
     if (import.meta.env.DEV) console.log('LOGOUT ERROR', error);

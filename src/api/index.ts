@@ -17,6 +17,7 @@ export const api = {
   saveSampleCollection: appointments.saveSampleCollection,
   saveTestResults: appointments.saveTestResults,
   updateAppointmentTestProvider: appointments.updateAppointmentTestProvider,
+  attachProviderToAppointment: appointments.attachProviderToAppointment,
   createBooking: appointments.createBooking,
 };
 
