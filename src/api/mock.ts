@@ -262,7 +262,7 @@ export const api = {
     if (!appointment) throw new Error('Appointment not found');
     const user = mockUsers.find(u => u.id === appointment.user_id);
     const pkg = mockPackages.find(p => p.id === appointment.package_id);
-    return { appointment, user, package: pkg, entries: [] };
+    return { appointment, user, package: pkg, packages: pkg ? [pkg] : [], entries: [] };
   },
 
   getHealthProviders: async (): Promise<HealthProvider[]> => {

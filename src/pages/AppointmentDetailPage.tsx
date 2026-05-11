@@ -36,6 +36,7 @@ type AppointmentDetails = {
   appointment: Appointment;
   user: User;
   package?: Package;
+  packages?: Package[];
   entries: ComponentEntry[];
 };
 
@@ -156,6 +157,7 @@ export default function AppointmentDetailPage() {
   const [validationError, setValidationError] = useState('');
   const [activeModuleId, setActiveModuleId] = useState(medicalModules[0].id);
   const [mobileWorkspaceOpen, setMobileWorkspaceOpen] = useState(false);
+  const [packageListOpen, setPackageListOpen] = useState(false);
   const [draggingModule, setDraggingModule] = useState<string | null>(null);
 
   useEffect(() => {
@@ -176,6 +178,7 @@ export default function AppointmentDetailPage() {
           appointment: data.appointment,
           user: data.user,
           package: data.package,
+          packages: data.packages,
           entries: data.entries,
         });
         setProviders(providerData);
@@ -184,6 +187,7 @@ export default function AppointmentDetailPage() {
         setOpenGroups(createInitialOpenState());
         setSavedSections({});
         setActiveModuleId(medicalModules[0].id);
+        setPackageListOpen(false);
       } catch (err) {
         console.error(err);
       } finally {
@@ -213,6 +217,11 @@ export default function AppointmentDetailPage() {
     }, { completed: 0, total: 0 });
     return totals;
   }, [formData]);
+
+  const appointmentPackages = useMemo(() => {
+    if (!details) return [];
+    return details.packages?.length ? details.packages : details.package ? [details.package] : [];
+  }, [details]);
 
   const updateField = (moduleId: string, fieldId: string, value: string) => {
     setFormData(prev => ({
@@ -358,27 +367,62 @@ export default function AppointmentDetailPage() {
   }
 
   const activeClinicalStatus = (activeValues.clinical_status || activeModule.defaultStatus) as ClinicalStatus;
+  const visiblePackages = appointmentPackages.slice(0, 3);
+  const hiddenPackageCount = Math.max(appointmentPackages.length - visiblePackages.length, 0);
 
   return (
     <div className="mx-auto max-w-6xl pb-28 md:pb-8">
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-lt text-brand">
-            <UserIcon size={24} />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold leading-tight text-n-900">{details.user.full_name}</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-n-600">
-              <span className="rounded bg-n-50 px-1.5 py-0.5 font-mono text-n-700">{details.user.employee_id}</span>
-              <span>{details.user.gender}</span>
-              <span><span className="font-mono">{calculateAge(details.user.dob)}</span> yrs</span>
-              <span className="font-mono">{details.user.mobile_number}</span>
+      <div className="ds-surface mb-4 p-4 md:p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="flex min-w-0 gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-lt text-brand">
+              <UserIcon size={24} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-bold leading-tight text-n-900">{details.user.full_name}</h1>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-n-600">
+                <span className="rounded bg-n-50 px-1.5 py-0.5 font-mono text-n-700">{details.user.employee_id}</span>
+                <span>{details.user.gender}</span>
+                <span><span className="font-mono">{calculateAge(details.user.dob)}</span> yrs</span>
+                <span className="font-mono">{details.user.mobile_number}</span>
+              </div>
             </div>
           </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="badge badge-info">Apt <span className="font-mono">{details.appointment.id}</span></span>
+            <span className="badge badge-neutral">{details.appointment.report_state}</span>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <span className="badge badge-info">Apt <span className="font-mono">{details.appointment.id}</span></span>
-          <span className="badge badge-neutral">{details.appointment.report_state}</span>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-n-500">
+            {appointmentPackages.length > 1 ? 'Packages' : 'Package'}
+          </span>
+          {appointmentPackages.length ? (
+            <>
+              {visiblePackages.map(pkg => (
+                <button
+                  key={pkg.id}
+                  type="button"
+                  className="min-h-8 rounded-full bg-brand-lt px-3 py-1 text-left text-xs font-bold text-brand transition-colors hover:bg-brand/10 active:bg-brand/15"
+                  onClick={() => setPackageListOpen(true)}
+                >
+                  {pkg.name}
+                </button>
+              ))}
+              {hiddenPackageCount > 0 && (
+                <button
+                  type="button"
+                  className="min-h-8 rounded-full bg-n-100 px-3 py-1 text-xs font-bold text-n-700 transition-colors hover:bg-brand-lt hover:text-brand active:bg-brand/10"
+                  onClick={() => setPackageListOpen(true)}
+                >
+                  +{hiddenPackageCount} More
+                </button>
+              )}
+            </>
+          ) : (
+            <span className="badge badge-neutral">Package pending</span>
+          )}
         </div>
       </div>
 
@@ -528,6 +572,42 @@ export default function AppointmentDetailPage() {
                   setMobileWorkspaceOpen(false);
                 }}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {packageListOpen && (
+        <div className="fixed inset-0 z-[80] bg-n-900/35 p-0 md:grid md:place-items-center md:p-6" role="dialog" aria-modal="true" aria-labelledby="package-list-title">
+          <div className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-[22px] bg-white shadow-xl md:static md:w-full md:max-w-md md:rounded-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-n-100 px-4 py-3">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand">Appointment Packages</div>
+                <h2 id="package-list-title" className="text-lg font-bold text-n-900">
+                  {appointmentPackages.length} selected
+                </h2>
+              </div>
+              <button type="button" className="btn btn-icon btn-secondary" aria-label="Close package list" onClick={() => setPackageListOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="max-h-[64dvh] space-y-3 overflow-y-auto p-4">
+              {appointmentPackages.map(pkg => (
+                <div key={pkg.id} className="rounded-2xl border border-n-200 bg-n-50 p-3">
+                  <div className="font-bold text-n-900">{pkg.name}</div>
+                  <div className="mt-1 text-xs font-medium text-n-500">
+                    <span className="font-mono text-n-700">{pkg.components.length}</span> tests included
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {pkg.components.slice(0, 6).map(component => (
+                      <span key={component.id} className="badge badge-neutral text-[11px]">{component.name}</span>
+                    ))}
+                    {pkg.components.length > 6 && (
+                      <span className="badge badge-info text-[11px]">+{pkg.components.length - 6} more</span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
